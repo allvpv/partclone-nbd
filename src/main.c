@@ -31,49 +31,6 @@
 
 // God's number: 543632
 
-
-void print_version_and_exit(void)
-{
-    printf("partclone-nbd v0.0.1\n");
-    exit(0);
-}
-
-void print_help_and_exit(void)
-{
-    printf(
-        "Usage: partclone-nbd [OPTION...] partclone_image\n"
-        "Use partclone images as NBD exports.\n"
-//        "\n"
-//        "  -d, --daemonize            Run in background.\n"
-//        "\n"
-//        "daemon options (works only with '-d'):\n"
-//        "  -p, --pid-file=FILE        Specify a filename to write our PID to (default\n"
-//        "                             path: /var/run/partclone-nbd.pid).\n"
-//        "  -S, --syslog               Use syslog instead of a standard log file.\n"
-        "\n"
-        "image options:\n"
-        "  -x, --elems-per-cache=NUM  Specify a number of bitmap elements per one cache\n"
-        "                             element (default: 512). Higher value means better\n"
-        "                             performance, but more RAM is consumed. Details in\n"
-        "                             manual.\n"
-        "\n"
-        "NBD options:\n"
-        "  -p, --port=NUM             Specify a port (default: 10809).\n"
-//        "  -M, --max-connections=NUM  Specify a maximum number of opened connections.\n"
-        "\n"
-        "global options:\n"
-        "  -?, --help                 Give this help list.\n"
-        "  -L, --log-file=FILE        Specify an alternative path for a log file\n"
-        "                             (default: /var/log/partclone-nbd.log).\n"
-        "  -q, -s, --quiet, --silent  Do not print debug messages.\n"
-        "  -V, --version              Print program version.\n"
-        "\n"
-        "Detalied descriptions of all options are available in the manual.\n"
-    );
-
-    exit(0);
-}
-
 int main(int argc, char **argv)
 {
     /* -------------------- PARSE OPTIONS -------------------- */

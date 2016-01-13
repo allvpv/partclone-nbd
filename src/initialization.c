@@ -37,38 +37,38 @@
 
 struct new_header
 {
-    utf8 magic[16]; // "partclone-image"
-    utf8 partclone_version_str[14]; // ex. "2.61"
-    utf8 image_version_str[4]; // "0001" (without terminating null)
-    u16  endianess_checker; // ENDIANNESS_COMPATIBLE or ENDIANNESS_INCOMPATIBLE
-	utf8 fs_string[16]; // file system string
-	u64  device_size; // size of source device in bytes
-	u64  blocks_count; // number of blocks in the filesystem
-	u64  used_blocks_filesystem; // used blocks (reported by filesystem)
-	u64  used_blocks_bitmap; // used blocks (reported by bitmap)
-	u32  block_size; // number of bytes in each block
-	u32  feauture_size; // size of fields under bytes_per_block
-	u16  image_version; // version of image (as in image_version_str)
-	u16  cpu_bits; // partclone architecture (32-bit - 32, 64-bit - 64)
-	u16  checksum_mode; // checksum algorithm used (CHECKSUM_CRC32 etc.)
-	u16  checksum_size; // size of one checksum (ex. CHECKSUM_CRC32 - 4)
-	u32  blocks_per_checksum; // how many blocks are checksumed
-	u8   reseed_checksum; // reseed checksum after write (1 - yes, 0 - none)
-	u8   bitmap_mode; // kind of bitmap (BM_BIT, BM_BYTE etc.)
-	u32  crc32; // crc32 of fields above
+    u8  magic[16]; // "partclone-image"
+    u8  partclone_version_str[14]; // ex. "2.61"
+    u8  image_version_str[4]; // "0001" (without terminating null)
+    u16 endianess_checker; // ENDIANNESS_COMPATIBLE or ENDIANNESS_INCOMPATIBLE
+    u8  fs_string[16]; // file system string
+    u64 device_size; // size of source device in bytes
+    u64 blocks_count; // number of blocks in the filesystem
+    u64 used_blocks_filesystem; // used blocks (reported by filesystem)
+    u64 used_blocks_bitmap; // used blocks (reported by bitmap)
+    u32 block_size; // number of bytes in each block
+    u32 feauture_size; // size of fields under bytes_per_block
+    u16 image_version; // version of image (as in image_version_str)
+    u16 cpu_bits; // partclone architecture (32-bit - 32, 64-bit - 64)
+    u16 checksum_mode; // checksum algorithm used (CHECKSUM_CRC32 etc.)
+    u16 checksum_size; // size of one checksum (ex. CHECKSUM_CRC32 - 4)
+    u32 blocks_per_checksum; // how many blocks are checksumed
+    u8  reseed_checksum; // reseed checksum after write (1 - yes, 0 - none)
+    u8  bitmap_mode; // kind of bitmap (BM_BIT, BM_BYTE etc.)
+    u32 crc32; // crc32 of fields above
 } __attribute__ ((packed));
 
 struct old_header
 {
-    utf8 magic[15]; // "partclone-image" (without terminating null)
-    utf8 fs_string[15]; // file system string
-    utf8 image_version_str[4]; // ex. "0001" (without terminating null)
-    u8   padding[2];
-    u32  block_size; // number of bytes in each block
-    u64  device_size; // size of source device in bytes
-    u64  blocks_count; // number of blocks in the filesystem
-    u64  used_blocks; // used blocks
-    u8   options[4096]; // not used
+    u8  magic[15]; // "partclone-image" (without terminating null)
+    u8  fs_string[15]; // file system string
+    u8  image_version_str[4]; // ex. "0001" (without terminating null)
+    u8  padding[2];
+    u32 block_size; // number of bytes in each block
+    u64 device_size; // size of source device in bytes
+    u64 blocks_count; // number of blocks in the filesystem
+    u64 used_blocks; // used blocks
+    u8  options[4096]; // not used
 } __attribute__ ((packed));
 
 union header

@@ -36,14 +36,14 @@ status initialize_log(struct options *options)
 {
     quiet = options->quiet;
 
-	if((log_fd = fopen(options->log_file ,"w")) == NULL) {
-		fprintf(stderr, "Failed to open log file %s: %s\n", options->log_file, strerror(errno));
-		return error;
-	} else {
-	    log_debug("Log initialized.");
-	}
+    if((log_fd = fopen(options->log_file ,"w")) == NULL) {
+        fprintf(stderr, "Failed to open log file %s: %s\n", options->log_file, strerror(errno));
+        return error;
+    } else {
+        log_debug("Log initialized.");
+    }
 
-	return ok;
+    return ok;
 }
 
 status close_log(void)

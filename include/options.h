@@ -30,6 +30,7 @@ struct options {
     char* log_file;
     u64 elems_per_cache;
     int port;
+    int syslog;
     int quiet;
 };
 
