@@ -30,33 +30,12 @@
 #include "partclone.h"
 
 
-#define OPTION(name, type)                                                                                              \
-struct {                                                                                                                \
-    int set_by_user;                                                                                                    \
-    type v;                                                                                                             \
-} name
-
-#define SET_OPTION(pointer, name, val) {                                                                                \
-    pointer->name.v = (val);                                                                                            \
-    pointer->name.set_by_user = 1;                                                                                      \
-}
-
-
 struct options {
-    OPTION(image_path, char*);
-//    OPTION(cfg_file, char*);
-//    OPTION(auth_file, char*);
-//    OPTION(pid_file, char*);
-    OPTION(log_file, char*);
-//    OPTION(max_connections, u64);
-    OPTION(elems_per_cache, u64);
-    OPTION(port, int);
-//    OPTION(check_crc, int);
-    OPTION(quiet, int);
-//    OPTION(different_endianness, int);
-//    OPTION(ip6, int);
-
-    int arguments_left;
+    char* image_path;
+    char* log_file;
+    u64 elems_per_cache;
+    int port;
+    int quiet;
 };
 
 #endif // OPTIONS_H_INCLUDED

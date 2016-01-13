@@ -34,14 +34,15 @@
 #include "partclone.h"
 
 static FILE *log_fd;
+
 static int quiet = 0;
 
 status initialize_log(struct options *options)
 {
-    quiet = options->quiet.v;
+    quiet = options->quiet;
 
-	if((log_fd = fopen(options->log_file.v ,"w")) == NULL) {
-		fprintf(stderr, "Failed to open log file %s: %s\n", options->log_file.v, strerror(errno));
+	if((log_fd = fopen(options->log_file ,"w")) == NULL) {
+		fprintf(stderr, "Failed to open log file %s: %s\n", options->log_file, strerror(errno));
 		return error;
 	} else {
 	    log_debug("Log initialized.");

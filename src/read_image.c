@@ -136,9 +136,6 @@ static inline status set_block_from_the_ground(struct instance *obj, u64 block)
 
     /* (d) ----------------------------------------------------------------- */
 
-//    u64 cache_element = 0;
-//    obj->o.blocks_set = 0;
-
     u64 cache_element =
         bitmap_element / obj->img->bitmap_elements_in_cache_element;
 

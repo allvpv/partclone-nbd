@@ -432,7 +432,7 @@ status start_server(struct image *img, struct options *options)
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(options->port.v);
+    server_addr.sin_port = htons(options->port);
 
     if(bind(sock, (struct sockaddr*) &server_addr, sizeof server_addr) == -1) {
         log_error("Failed to bind port to a socket: %s.", strerror(errno));
@@ -449,7 +449,7 @@ status start_server(struct image *img, struct options *options)
         log_debug("Listening on a port started.");
     }
 
-    log_info("Server initialized. Listening on a port %i", options->port.v);
+    log_info("Server initialized. Listening on a port %i", options->port);
 
     for(;;) {
         /* allocate memory for an argument */

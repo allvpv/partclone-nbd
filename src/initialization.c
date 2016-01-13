@@ -88,7 +88,7 @@ status load_image(struct image *img, struct options *options)
 {
     /* -------------------- OPEN IMAGE FILE -------------------- */
 
-    img->path = options->image_path.v;
+    img->path = options->image_path;
 
     int fd = open(img->path, O_RDONLY);
 
@@ -128,7 +128,7 @@ status load_image(struct image *img, struct options *options)
         img->used_blocks = head.v1.used_blocks;
         img->bitmap_offset = sizeof(struct old_header);
         img->data_offset = img->bitmap_offset + head.v1.blocks_count + 8;
-        img->bitmap_elements_in_cache_element = options->elems_per_cache.v;
+        img->bitmap_elements_in_cache_element = options->elems_per_cache;
 
         /* 0001 images used corrupted checksum implementation - the first byte was
          * computed over and over again. To avoid a waste of time, checksum is

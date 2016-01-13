@@ -1,11 +1,11 @@
 nearest future:
--> make partclone-nbd a real server (gid, uid, daemonize, pidfile, etc.)
+-> make partclone-nbd a real server (daemonize, syslog, etc.)
 -> add support for new version of partclone images
--> add config file support
 
 later:
 -> add crc support
 -> POSIX compatibility (the ability tu run partclone-nbd on FreeBSD, MacOS X, etc.)
 
 distant future:
--> Microsoft Windows support
+-> different endianness support
+-> write support
