@@ -76,7 +76,6 @@ status close_instance(struct instance *obj)
     return ok;
 }
 
-
 status set_block(struct instance *obj, u64 block)
 {
     if(block == obj->o.num + 1) {

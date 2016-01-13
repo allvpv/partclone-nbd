@@ -24,8 +24,6 @@
  * project neededs. Original code was licensed under terms of zlib license.
  */
 
-#include <stddef.h>
-
 #include "partclone.h"
 #include "crc.h"
 
@@ -36,59 +34,65 @@ u32 count_crc32(const void* data, size_t length, u32 previous_crc32)
     u32 crc = ~previous_crc32;
     const u32* current = (const u32*) data;
 
-    while (length >= 64)
-    {
-        int i;
+    while (length >= 64) {
+        u32 v1, v2, v3, v4;
 
-        // enabling optimization (at least -O2) automatically unrolls loop
-        for (i = 0; i < 4; i++)
-        {
-#if __BYTE_ORDER__ == __BIG_ENDIAN__
-            u32 one   = *current++ ^ swap(crc);
-            u32 two   = *current++;
-            u32 three = *current++;
-            u32 four  = *current++;
-            crc  = crc32_lookup[ 0][ four         & 0xFF] ^
-                   crc32_lookup[ 1][(four  >>  8) & 0xFF] ^
-                   crc32_lookup[ 2][(four  >> 16) & 0xFF] ^
-                   crc32_lookup[ 3][(four  >> 24) & 0xFF] ^
-                   crc32_lookup[ 4][ three        & 0xFF] ^
-                   crc32_lookup[ 5][(three >>  8) & 0xFF] ^
-                   crc32_lookup[ 6][(three >> 16) & 0xFF] ^
-                   crc32_lookup[ 7][(three >> 24) & 0xFF] ^
-                   crc32_lookup[ 8][ two          & 0xFF] ^
-                   crc32_lookup[ 9][(two   >>  8) & 0xFF] ^
-                   crc32_lookup[10][(two   >> 16) & 0xFF] ^
-                   crc32_lookup[11][(two   >> 24) & 0xFF] ^
-                   crc32_lookup[12][ one          & 0xFF] ^
-                   crc32_lookup[13][(one   >>  8) & 0xFF] ^
-                   crc32_lookup[14][(one   >> 16) & 0xFF] ^
-                   crc32_lookup[15][(one   >> 24) & 0xFF];
-#else
-            u32 one   = *current++ ^ crc;
-            u32 two   = *current++;
-            u32 three = *current++;
-            u32 four  = *current++;
-            crc  = crc32_lookup[ 0][(four  >> 24) & 0xFF] ^
-                   crc32_lookup[ 1][(four  >> 16) & 0xFF] ^
-                   crc32_lookup[ 2][(four  >>  8) & 0xFF] ^
-                   crc32_lookup[ 3][ four         & 0xFF] ^
-                   crc32_lookup[ 4][(three >> 24) & 0xFF] ^
-                   crc32_lookup[ 5][(three >> 16) & 0xFF] ^
-                   crc32_lookup[ 6][(three >>  8) & 0xFF] ^
-                   crc32_lookup[ 7][ three        & 0xFF] ^
-                   crc32_lookup[ 8][(two   >> 24) & 0xFF] ^
-                   crc32_lookup[ 9][(two   >> 16) & 0xFF] ^
-                   crc32_lookup[10][(two   >>  8) & 0xFF] ^
-                   crc32_lookup[11][ two          & 0xFF] ^
-                   crc32_lookup[12][(one   >> 24) & 0xFF] ^
-                   crc32_lookup[13][(one   >> 16) & 0xFF] ^
-                   crc32_lookup[14][(one   >>  8) & 0xFF] ^
-                   crc32_lookup[15][ one          & 0xFF];
-#endif
-        }
+        #define loop_be                                                                                                     \
+            v1 = *current++ ^ swap(crc);                                                                                    \
+            v2 = *current++;                                                                                                \
+            v3 = *current++;                                                                                                \
+            v4 = *current++;                                                                                                \
+                                                                                                                            \
+            crc = crc32_lookup[ 0][ v4        & 0xFF] ^                                                                     \
+                  crc32_lookup[ 1][(v4 >>  8) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 2][(v4 >> 16) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 3][(v4 >> 24) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 4][ v3        & 0xFF] ^                                                                     \
+                  crc32_lookup[ 5][(v3 >>  8) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 6][(v3 >> 16) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 7][(v3 >> 24) & 0xFF] ^                                                                     \
+                  crc32_lookup[ 8][ v2        & 0xFF] ^                                                                     \
+                  crc32_lookup[ 9][(v2 >>  8) & 0xFF] ^                                                                     \
+                  crc32_lookup[10][(v2 >> 16) & 0xFF] ^                                                                     \
+                  crc32_lookup[11][(v2 >> 24) & 0xFF] ^                                                                     \
+                  crc32_lookup[12][ v1        & 0xFF] ^                                                                     \
+                  crc32_lookup[13][(v1 >>  8) & 0xFF] ^                                                                     \
+                  crc32_lookup[14][(v1 >> 16) & 0xFF] ^                                                                     \
+                  crc32_lookup[15][(v1 >> 24) & 0xFF];
+
+        #define loop_le                                                                                                     \
+            v1 = *current++ ^ crc;                                                                                          \
+            v2 = *current++;                                                                                                \
+            v3 = *current++;                                                                                                \
+            v4 = *current++;                                                                                                \
+                                                                                                                            \
+            crc  = crc32_lookup[ 0][(v4 >> 24) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 1][(v4 >> 16) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 2][(v4 >>  8) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 3][ v4        & 0xFF] ^                                                                    \
+                   crc32_lookup[ 4][(v3 >> 24) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 5][(v3 >> 16) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 6][(v3 >>  8) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 7][ v3        & 0xFF] ^                                                                    \
+                   crc32_lookup[ 8][(v2 >> 24) & 0xFF] ^                                                                    \
+                   crc32_lookup[ 9][(v2 >> 16) & 0xFF] ^                                                                    \
+                   crc32_lookup[10][(v2 >>  8) & 0xFF] ^                                                                    \
+                   crc32_lookup[11][ v2        & 0xFF] ^                                                                    \
+                   crc32_lookup[12][(v1 >> 24) & 0xFF] ^                                                                    \
+                   crc32_lookup[13][(v1 >> 16) & 0xFF] ^                                                                    \
+                   crc32_lookup[14][(v1 >>  8) & 0xFF] ^                                                                    \
+                   crc32_lookup[15][ v1        & 0xFF];
+
+        #if __BYTE_ORDER__ == __BIG_ENDIAN__
+            loop_be; loop_be; loop_be; loop_be;
+        #else
+            loop_le; loop_le; loop_le; loop_le;
+        #endif
+
+        #undef loop
 
         length -= 64;
+
     }
 
     const u8* current_char = (const u8*) current;
