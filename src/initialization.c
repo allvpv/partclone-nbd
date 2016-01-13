@@ -279,7 +279,7 @@ static status load_byte_bitmap(struct image *img, int fd)
     u8 *bytearray_ptr;
     int length = img->blocks_count + 8 + img->bitmap_offset;
 
-    bytearray_ptr = mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0);
+    bytearray_ptr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
 
     if(bytearray_ptr == MAP_FAILED) {
         log_error("Cannot map bytemap to memory: %s.", strerror(errno));

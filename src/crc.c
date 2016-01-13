@@ -21,7 +21,7 @@
  */
 
 /* In fact, it is Stephan Brumme implementation, slightly modified to fit this
- * project. Original code was licensed under terms of zlib license.
+ * project neededs. Original code was licensed under terms of zlib license.
  */
 
 #include <stddef.h>
