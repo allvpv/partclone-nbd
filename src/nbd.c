@@ -444,7 +444,7 @@ status start_server(struct image *img, struct options *options)
         log_debug("Listening on a port started.");
     }
 
-    log_info("Server initialized. Listening on a port %i", options->port);
+    log_info("Server initialized. Listening on a port %i ...", options->port);
 
     for(;;) {
         /* allocate memory for an argument */

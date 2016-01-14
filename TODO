@@ -3,6 +3,7 @@ nearest future:
 -> add support for new version of partclone images
 
 later:
+-> add signal handlers to free memory and close descriptors before exiting
 -> add crc support
 -> POSIX compatibility (the ability tu run partclone-nbd on FreeBSD, MacOS X, etc.)
 

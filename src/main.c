@@ -36,9 +36,10 @@ int main(int argc, char **argv)
     /* -------------------- PARSE OPTIONS -------------------- */
     struct options options = {
         .image_path = NULL,
-        .log_file = "/var/log/partclone-nbd.log",
+        .log_file = "partclone-nbd.log",
         .elems_per_cache = 512,
         .port = 10809,
+        .syslog = 0,
         .quiet = 0
     };
 
@@ -48,6 +49,7 @@ int main(int argc, char **argv)
         {"help",                no_argument,        NULL, 'h'},
         {"log-file",            required_argument,  NULL, 'L'},
         {"quiet",               no_argument,        NULL, 'q'},
+        {"syslog",              no_argument,        NULL, 'S'},
         {"silent",              no_argument,        NULL, 's'},
         {"version",             no_argument,        NULL, 'V'},
         {0},
@@ -55,7 +57,7 @@ int main(int argc, char **argv)
 
     for(;;) {
         int idx = 0;
-        int opt = getopt_long(argc, argv, "p:x:hL:qsV", longopts, &idx);
+        int opt = getopt_long(argc, argv, "p:x:hL:qSsV", longopts, &idx);
 
         if(opt == -1) break;
 
@@ -72,13 +74,20 @@ int main(int argc, char **argv)
             printf(
                 "Usage: partclone-nbd [OPTION...] partclone_image\n"
                 "Serve a partclone image as a block device.\n"
+                "\n"
+//              "modes:\n"
+//              "  -d, --daemon-mode          Run in background.\n"
+//              "  -s, --standard-mode        Standard mode, enabled by default\n"
 //              "\n"
-//              "  -d, --daemonize            Run in background.\n"
-//              "\n"
-//              "daemon options (works only with '-d'):\n"
+//              "daemon mode options (works only with '-d'):\n"
 //              "  -p, --pid-file=FILE        Specify a filename to write our PID to (default\n"
 //              "                             path: /var/run/partclone-nbd.pid).\n"
-//              "  -S, --syslog               Use syslog instead of a standard log file.\n"
+//              "\n"
+                "log_options:\n"
+                "  -l, --filelog              Use a log file instead of syslog (default).\n"
+                "  -S, --syslog               Use syslog instead of a log file.\n"
+                "  -L, --log-file=FILE        Specify an alternative path for a log file.\n"
+                "                             Default: partclone-nbd.log.\n"
                 "\n"
                 "image options:\n"
                 "  -x, --elems-per-cache=NUM  Specify a number of bitmap elements per one cache\n"
@@ -90,46 +99,48 @@ int main(int argc, char **argv)
                 "  -p, --port=NUM             Specify a port (default: 10809).\n"
 //              "  -M, --max-connections=NUM  Specify a maximum number of opened connections.\n"
                 "\n"
-                "global options:\n"
+                "other options:\n"
                 "  -h, --help                 Give this help list.\n"
-                "  -L, --log-file=FILE        Specify an alternative path for a log file\n"
-                "                             (default: /var/log/partclone-nbd.log).\n"
-                "  -q, -s, --quiet, --silent  Do not print debug messages.\n"
+                "  -q, --quiet                Do not print debug messages.\n"
                 "  -V, --version              Print program version.\n"
                 "\n"
                 "Detalied descriptions of all options are available in the manual.\n"
             );
-            exit(0);
+
+            return (int) ok;
 
         case 'V':
             printf("partclone-nbd v0.0.1\n");
-            exit(0);
+            return (int) ok;
 
         case 'L':
             options.log_file = optarg;
             break;
 
+        case 'S':
+            options.syslog = 1;
+            break;
+
         case 'q':
-        case 's':
             options.quiet = 1;
             break;
 
         case '?':
             fprintf(stderr, "Type 'partclone-nbd --help' or 'man partclone'.\n");
-            exit(-1);
+            return (int) error;
         }
     }
 
     if(optind >= argc) {
         fprintf(stderr, "%s: no image file specified.\n", argv[0]);
-        exit(-1);
+        return (int) error;
     } else {
         options.image_path = argv[optind];
     }
 
     struct image img;
 
-    if(initialize_log(&options) == error) exit(-1);
+    if(initialize_log(&options) == error) goto error_1;
     if(load_image(&img, &options) == error) goto error_2;
     if(start_server(&img, &options) == error) goto error_3;
     if(close_image(&img) == error) goto error_2;
@@ -142,9 +153,9 @@ error_3:
     close_image(&img);
 
 error_2:
+    log_error("Errors occured - see log file for details.");
     close_log();
 
 error_1:
-    log_error("Errors occured - see log file for details.");
     return (int) error;
 }
