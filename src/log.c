@@ -42,7 +42,7 @@ status initialize_log(struct options *options)
     if(syslog_enabled) {
 
         if(fclose(stdout) == EOF || fclose(stderr) == EOF) {
-            log_msg(log_error, "Cannot close stdout and stderr: %s", strerror(errno));
+            fprintf(stderr, "Cannot close stdout and stderr: %s", strerror(errno));
             return error;
         }
 
