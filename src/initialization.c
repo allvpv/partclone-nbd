@@ -78,6 +78,7 @@ union header
 } __attribute__ ((packed));
 
 static inline status load_byte_bitmap(struct image *img, int fd);
+static status load_bit_bitmap(struct image *img, int fd);
 
 status load_image(struct image *img, struct options *options)
 {
@@ -140,7 +141,19 @@ status load_image(struct image *img, struct options *options)
 
     } else if(memcmp(head.v2.image_version_str, "0002", 4) == 0) {
 
-        log_error("Image version 0002 not supported yet.");
+        log_debug("Detected supported image version 0002.");
+
+        img->blocks_count = head.v2.blocks_count;
+        img->blocks_per_checksum = head.v2.blocks_per_checksum;
+        img->block_size = head.v2.block_size;
+        img->bmpmode = head.v2.bitmap_mode;
+        img->checksum_size = head.v2.checksum_size;
+        img->device_size = head.v2.device_size;
+        img->used_blocks = head.v2.used_blocks_bitmap;
+        img->bitmap_offset = sizeof(struct new_header);
+        img->bitmap_elements_in_cache_element = options->elems_per_cache;
+        img->data_offset = img->bitmap_offset + divide_up(img->blocks_count, 8) + img->checksum_size;
+
         goto error_2;
 
     } else {
@@ -167,6 +180,11 @@ status load_image(struct image *img, struct options *options)
     {
     case bit:
         log_error("Bitmap type \"bit\" is not supported yet.");
+
+        if(load_bit_bitmap(img, fd) == error) {
+            goto error_2;
+        }
+
         goto error_2;
     case none:
         log_error("Bitmap type \"none\" is not supported yet.");
@@ -364,4 +382,44 @@ error_1:
 
     log_error("Cannot load bytemap to bitmap.");
     return error;
+}
+
+static status load_bit_bitmap(struct image *img, int fd)
+{
+    /* allocate memory for bitmap */
+    img->bitmap_elements = divide_up(img->blocks_count, 64);
+    img->bitmap_size = img->bitmap_elements * 8;
+
+    log_debug("Memory reqiuered by bitmap " fu64 " bytes.", img->bitmap_size);
+
+    img->bitmap_ptr = calloc(img->bitmap_size, 1);
+
+    if(img->bitmap_ptr == NULL) {
+        log_error("Cannnot allocate memory for bitmap: %s.", strerror(errno));
+        goto error_1;
+    } else {
+        log_debug("Memory for bitmap allocated.");
+    }
+
+    if(set_file_offset(fd, img->bitmap_offset, SEEK_SET) == error) {
+        log_error("Cannot set file image offset to bitmap.");
+        goto error_2;
+    } else {
+        log_debug("Offset set to bitmap.");
+    }
+
+    if(read_whole(fd, img->bitmap_ptr, divide_up(img->blocks_count, 8)) == error) {
+        log_error("Cannot read bitmap: %s.", strerror(errno));
+        goto error_2;
+    }
+
+   log_debug("Bitmap loaded.");
+
+   return ok;
+
+error_2:
+   free(img->bitmap_ptr);
+error_1:
+   log_error("Cannot load bitmap.");
+   return error;
 }

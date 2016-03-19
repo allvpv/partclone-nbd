@@ -1,3 +1,5 @@
+-> SIGNALS SUPPORT!!!
+
 nearest future:
 -> make partclone-nbd a real server (daemonize, syslog, etc.)
 -> add support for new version of partclone images
