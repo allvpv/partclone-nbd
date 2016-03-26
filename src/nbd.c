@@ -28,6 +28,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -36,11 +37,31 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <stdio.h>
+#include <stropts.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/sendfile.h>
 
 #ifndef MIN
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
+
+// Macros from Linux kernel headers nbd.h and fs.h. Needed in start_client() method.
+
+#define NBD_SET_SOCK        _IO( 0xab, 0 )
+#define NBD_SET_BLKSIZE     _IO( 0xab, 1 )
+#define NBD_SET_SIZE        _IO( 0xab, 2 )
+#define NBD_DO_IT           _IO( 0xab, 3 )
+#define NBD_CLEAR_SOCK      _IO( 0xab, 4 )
+#define NBD_CLEAR_QUE       _IO( 0xab, 5 )
+#define NBD_PRINT_DEBUG     _IO( 0xab, 6 )
+#define NBD_SET_SIZE_BLOCKS _IO( 0xab, 7 )
+#define NBD_DISCONNECT      _IO( 0xab, 8 )
+#define NBD_SET_TIMEOUT     _IO( 0xab, 9 )
+#define NBD_SET_FLAGS       _IO( 0xab, 10)
+#define BLKROSET            _IO( 0x12, 93) /* set RO */
+
 
 int get(int sock, void *buff, int count)
 {
@@ -132,18 +153,237 @@ static status send_reply(int sock, u64 handle, u32 error_number)
     /* ---------------------------------------------------------------------- */
         log_error("Failed to send reply for the request.");
         return error;
-    } else {
-//        log_debug("Reply for the request sent succesfull.");
-
     }
 
     return ok;
 }
 
+static status WORKER(int sock, struct instance *obj)
+{
+    void *buff, *zero;
+
+    buff = malloc(obj->img->block_size);
+    // calloc do malloc and fills buffer with zeroes
+    zero = calloc(obj->img->block_size, 1); // "1" means size, NOT "fill with 1"
+
+    if(buff == NULL || zero == NULL) /* allocation failed */ {
+        log_error("Cannot allocate memory for storing a chunk.");
+        goto error_1;
+    } else {
+        log_debug("Memory for storing a chunk allocated.");
+    }
+
+    // ====================================================================== //
+    // ======================== REQUEST & REPLIES =========================== //
+    // ====================================================================== //
+
+    /* the great loop */
+    for(;;)
+    {
+        u32 magic, count, type;
+        u64 seek, handle;
+
+        if(get32(sock, &magic) == error   || // 0x25609513
+           get32(sock, &type) == error    || // 0 -read
+           get64(sock, &handle) == error  || // handle
+           get64(sock, &seek) == error    || // seek
+           get32(sock, &count) == error   ){ // length
+        // ----------------------------------------------------------------- //
+            log_error("Failed to read request.");
+            break;
+        }
+
+        if(magic != 0x25609513) {
+            log_error("Parsing request: Bad magic.");
+        }
+
+        // verify request
+        if(seek > obj->img->device_size || count +seek > obj->img->device_size) {
+        // ----------------------------------------------------------------- //
+            log_msg(log_error,
+                    "Parsing request: Offset is beyond the end of the image.");
+            if(send_reply(sock, handle, EINVAL) == ok) continue;
+            else break;
+        // write (1), flush (3) or trim (4) on a RO device is not permitted
+        } else if(type == 1 || type == 3 || type == 4) {
+            log_error("Parsing request: Unexpected operation in "
+                               "RO mode.");
+            if(send_reply(sock, handle, EPERM) == ok) continue;
+            else break;
+        } else if(type == 2) { /* disconnect request */
+            log_error("Client sent a disconnect request.");
+            break;
+        } else if(type != 0) { /* unknown request; 0 - read request */
+            log_error("Parsing request: Unexpected request type.");
+            break;
+        }
+
+        if(send_reply(sock, handle, 0) == error) break;
+
+        u64 block  = seek / obj->img->block_size;
+        u32 offset = seek % obj->img->block_size;
+
+        if(set_block(obj, block) == error) goto error_3;
+        if(offset_in_current_block(obj, offset) == error) goto error_3;
+
+        void *read_buff; // read_buff = zero OR buff (see below)
+
+        // send all chunks; size of chunk = size of image block (see *buff)
+        for (;count > 0;) {
+
+            u32 once_read = MIN(obj->o.remaining_bytes, count);
+            count -= once_read;
+            obj->o.remaining_bytes -= once_read;
+
+            // ------------------------------------------------------------- //
+
+            if(obj->o.existence == 0) {
+                read_buff = zero;
+
+            } else if(read_whole(obj->o.fd, buff, once_read) != error) {
+                read_buff = buff;
+
+            } else {
+                log_error("Failed to read some data from the image.");
+                goto error_3;
+            }
+
+            // ------------------------------------------------------------- //
+
+            if(put(sock, read_buff, once_read) != once_read) {
+                log_error("Failed to send data to the image.");
+                goto error_3;
+            }
+
+            next_block(obj);
+        }
+    }
+
+error_3:
+    free(buff);
+
+error_1:
+    log_error("WORKER closed ...");
+    return error;
+}
+
+// pthread method to put arguments to a thread.
 struct args {
     int cl_sock;
     struct image *img;
 };
+
+// SERVER METHOD vs CLIENT METHOD
+
+// Both client method and server method try to gain socket to communicate with a
+// client. Client can be on the same computer as partclone-nbd, or somewhere in
+// the internet.
+
+// Server method can serve image to another computers through the INET socks.
+
+// Client method is much faster than server, because it uses UNIX(r) sockets,
+// not INET sockets. But, of course, it's limited to one machine.
+
+// Client method is linux-specific, while server method can be used on, eg. Mac
+// OS using external, osx-nbd client. 
+
+// Both client method and server method finally call WORKER function.
+
+/* ------------------------- SERVER METHOD --------------------------------- */
+
+void *server_thread(void *args); // definition below, for better readability
+
+status start_server(struct image *img, struct options *options)
+{
+    // create listener socket
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    if(sock == -1) {
+        log_error("Failed to create a socket: %s.", strerror(errno));
+        return error;
+    } else {
+        log_debug("Socket created.");
+    }
+
+    // allow to reuse address
+    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) == -1) {
+        log_error("Failed to reuse address: %s.", strerror(errno));
+    } else {
+        log_debug("Address reused.");
+    }
+
+    // bind port to a socket
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof server_addr);
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(options->port);
+
+    if(bind(sock, (struct sockaddr*) &server_addr, sizeof server_addr) == -1) {
+        log_error("Failed to bind port to a socket: %s.", strerror(errno));
+        goto error;
+    } else {
+        log_debug("Socket binded to a port.");
+    }
+
+    // start listening on a port
+    if(listen(sock, 5) == -1) {
+        log_error("Failed to start listening on a port.");
+        goto error;
+    } else {
+        log_debug("Listening on a port started.");
+    }
+
+    log_info("Server initialized. Listening on a port %i ...", options->port);
+
+    // the server loop
+    for(;;) {
+        /* allocate memory for an argument */
+        struct args *arg = malloc(sizeof *arg);
+
+        if(arg == NULL) {
+            log_error("Cannot allocate memory for thread arguments.");
+            continue;
+        }
+
+        /* accept a connection */
+        struct sockaddr_in clientaddr;
+        socklen_t clientaddrlen = sizeof clientaddr;
+
+        int cl_sock = accept(sock, (struct sockaddr*) &clientaddr, &clientaddrlen);
+
+        if(cl_sock == -1) {
+            log_error("Failed to accept a connection.");
+            free(arg);
+            continue;
+        }
+
+        arg->cl_sock = cl_sock;
+        arg->img = img;
+
+        log_info("Connection made with %s.", inet_ntoa(clientaddr.sin_addr));
+
+        pthread_t t;
+
+        if(pthread_create(&t, NULL, server_thread, arg) == error) {
+            log_error("Failed to create server thread: %s.", strerror(errno));
+            free(arg);
+            goto error;
+        } else {
+            log_debug("Thread created.");
+        }
+    }
+
+error:
+    if(close(sock) == -1) {
+        log_error("Failed to close main sock: %s.", strerror(errno));
+    } else {
+        log_debug("Main sock closed.");
+    }
+
+    return error;
+}
 
 void *server_thread(void *args)
 {
@@ -161,8 +401,7 @@ void *server_thread(void *args)
         log_debug("Image instance created.");
     }
 
-    void *zero =
-        calloc(obj.img->block_size > 124 ? obj.img->block_size : 124, 1);
+    void *zero = calloc(124, 1);
 
     void *buff =
         malloc(obj.img->block_size);
@@ -245,8 +484,8 @@ void *server_thread(void *args)
     u32 cl_option, cl_length;
 
     if(get64(sock, &cl_magic)  == error ||
-        get32(sock, &cl_option) == error ||
-        get32(sock, &cl_length) == error ){
+       get32(sock, &cl_option) == error ||
+       get32(sock, &cl_length) == error ){
     /* ---------------------------------------------------------------------- */
         log_error("Failed to receive an option");
         goto error_1;
@@ -260,7 +499,7 @@ void *server_thread(void *args)
     }
 
     // NBD_OPT_EXPORT_NAME (1) - This is the first and only option in nonfixed
-    // newstyle handshade (which is used there).
+    // newstyle handshake (which is used there).
 
     if(cl_option != 1) {
         log_error("Unrecognized option.");
@@ -279,7 +518,7 @@ void *server_thread(void *args)
 
 
     if(put64(sock, obj.img->device_size) == error ||
-        put16(sock, flags2)               == error ){
+       put16(sock, flags2)               == error ){
     /* ---------------------------------------------------------------------- */
         log_error("Failed to send reply for an option");
         goto error_1;
@@ -288,95 +527,16 @@ void *server_thread(void *args)
     }
 
     if(put(sock, zero, 124) != 124) {
-        log_msg(log_error,
-                "Failed to send 124 bytes of zero ending negotiation.");
+        log_error("Failed to send 124 bytes of zero ending negotiation.");
     } else {
-        log_msg(log_debug,
-                "124 bytes of zero ending negotiation sent successufull.");
+        log_debug("124 bytes of zero ending negotiation sent successufull.");
     }
 
-    // ====================================================================== //
-    // ======================== REQUEST & REPLIES =========================== //
-    // ====================================================================== //
+    // FINALLY we gained client socket
 
-    /* main loop */
-    for(;;)
-    {
-        u32 magic, count, type;
-        u64 seek, handle;
+    WORKER(sock, &obj); 
+    log_info("... so we are waiting for new connections.");
 
-        if(get32(sock, &magic) == error    || // 0x25609513
-            get32(sock, &type) == error    || // 0 -read
-            get64(sock, &handle) == error  || // handle
-            get64(sock, &seek) == error    || // seek
-            get32(sock, &count) == error   ){ // length
-        // ----------------------------------------------------------------- //
-            log_error("Failed to read request.");
-            break;
-        }
-
-        if(magic != 0x25609513) {
-            log_error("Parsing request: Bad magic.");
-        }
-
-        // verify request
-        if(seek > obj.img->device_size || count +seek > obj.img->device_size) {
-        // ----------------------------------------------------------------- //
-            log_msg(log_error,
-                    "Parsing request: Offset is beyond the end of the image.");
-            if(send_reply(sock, handle, EINVAL) == ok) continue;
-            else break;
-        // write (1), flush (3) or trim (4) on a RO device is not permited
-        } else if(type == 1 || type == 3 || type == 4) {
-            log_error("Parsing request: Unexpected operation in "
-                               "RO mode.");
-            if(send_reply(sock, handle, EPERM) == ok) continue;
-            else break;
-        } else if(type == 2) { /* disconnect request */
-            log_error("Client sent a disconnect request.");
-            break;
-        } else if(type != 0) { /* unknown request; 0 - read request */
-            log_error("Parsing request: Unexpected request type.");
-            break;
-        }
-
-        if(send_reply(sock, handle, 0) == error) break;
-
-        u64 block  = seek / obj.img->block_size;
-        u32 offset = seek % obj.img->block_size;
-
-        if(set_block(&obj, block) == error) goto error_1;
-        if(offset_in_current_block(&obj, offset) == error) goto error_1;
-
-        for (;count > 0;) {
-
-            u32 once_read = MIN(obj.o.remaining_bytes, count);
-            count -= once_read;
-            obj.o.remaining_bytes -= once_read;
-
-            // ------------------------------------------------------------- //
-
-            if(obj.o.existence == 0) {
-                read_buff = zero;
-
-            } else if(read_whole(obj.o.fd, buff, once_read) != error) {
-                read_buff = buff;
-
-            } else {
-                log_error("Failed to read some data from the image.");
-                goto error_1;
-            }
-
-            // ------------------------------------------------------------- //
-
-            if(put(sock, read_buff, once_read) != once_read) {
-                log_error("Failed to send data to the image.");
-                goto error_1;
-            }
-
-            next_block(&obj);
-        }
-    }
 
 error_1:
     free(buff);
@@ -402,96 +562,128 @@ error_3:
     return 0;
 }
 
-status start_server(struct image *img, struct options *options)
+/* ------------------------- CLIENT METHOD ---------------------------------- */
+
+// this thread imitates a client.
+void *lock_on_do_it(void *devsock_addr)
 {
-    // create listener socket
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    int devsock = *(int*) devsock_addr;
 
-    if(sock == -1) {
-        log_error("Failed to create a socket: %s.", strerror(errno));
-        return error;
+    if (ioctl(devsock, NBD_DO_IT) == -1) {
+        log_error("Failed to lock on NBD_DO_IT: %s.", strerror(errno));
+    }
+
+    pthread_exit(0);
+}
+
+
+status start_client(struct image *img, struct options *options)
+{
+    struct instance obj;
+
+    if(create_instance(&obj, img) == error) {
+        log_error("Cannot create an instance of the image.");
+        goto error_1;
     } else {
-        log_debug("Socket created.");
+        log_debug("Image instance created.");
     }
 
-    // allow to reuse address
-    if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) == -1) {
-        log_error("Failed to reuse address: %s.", strerror(errno));
+    int socket[2]; // socket[0] goes to the kernel, socket[1] to us
+
+    if (socketpair(PF_UNIX, SOCK_STREAM, 0, socket) == -1) {
+        log_error("Cannot create a pair of sockets: %s.", strerror(errno));
+        goto error_2;
     } else {
-        log_debug("Address reused.");
+        log_debug("A pair of sockets created.");
     }
 
-    // bind port to a socket
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof server_addr);
+    int communication_sock = socket[1];
+    int kernel_sock = socket[0];
+    int device_sock = open(options->device_path, O_RDWR);
 
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(options->port);
-
-    if(bind(sock, (struct sockaddr*) &server_addr, sizeof server_addr) == -1) {
-        log_error("Failed to bind port to a socket: %s.", strerror(errno));
-        goto error;
+ 
+    if (device_sock == -1) {
+        log_error("Failed to open %s device in RW mode: %s.", options->device_path, strerror(errno));
+        goto error_3;
     } else {
-        log_debug("Socket binded to a port.");
+        log_debug("%s device opened.", options->device_path);
     }
 
-    // start listening on a port
-    if(listen(sock, 5) == -1) {
-        log_error("Failed to start listening on a port.");
-        goto error;
+    if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {
+        log_error("Failed to clear a NBD device socket: %s.", strerror(errno));
+        goto error_4;
     } else {
-        log_debug("Listening on a port started.");
+        log_debug("NBD device socket cleared.");
     }
 
-    log_info("Server initialized. Listening on a port %i ...", options->port);
-
-    for(;;) {
-        /* allocate memory for an argument */
-        struct args *arg = malloc(sizeof *arg);
-
-        if(arg == NULL) {
-            log_error("Cannot allocate memory for thread arguments.");
-            continue;
-        }
-
-        /* accept a connection */
-        struct sockaddr_in clientaddr;
-        socklen_t clientaddrlen = sizeof clientaddr;
-
-        int cl_sock = accept(sock, (struct sockaddr*) &clientaddr, &clientaddrlen);
-
-        if(cl_sock == -1) {
-            log_error("Failed to accept a connection.");
-            free(arg);
-            continue;
-        }
-
-        arg->cl_sock = cl_sock;
-        arg->img = img;
-
-        log_info("Connection made with %s.", inet_ntoa(clientaddr.sin_addr));
-
-
-        pthread_t t;
-
-        if(pthread_create(&t, NULL, server_thread, arg) == error) {
-            log_error("Failed to create server thread: %s.", strerror(errno));
-            free(arg);
-            goto error;
-        } else {
-            log_debug("Thread created.");
-        }
-    }
-
-    return ok;
-
-error:
-    if(close(sock) == -1) {
-        log_error("Failed to close main sock: %s.", strerror(errno));
+    if (ioctl(device_sock, NBD_SET_SOCK, kernel_sock) == -1) {
+        log_error("Failed to set socket for communication with kernel: %s.", strerror(errno));
+        goto error_4;
     } else {
-        log_debug("Main sock closed.");
+        log_debug("Socket for communication with kernel set.");
     }
 
+    if (ioctl(device_sock, NBD_SET_BLKSIZE, img->block_size) == -1) {
+        log_error("Failed to send image block size (" fu32 "): %s.", img->block_size, strerror(errno));
+        goto error_5;
+    } else {
+        log_debug("Image block size (" fu32 ") sent.", img->block_size);
+    }
+
+    if (ioctl(device_sock, NBD_SET_SIZE_BLOCKS, img->blocks_count) == -1) {
+        log_error("Failed to send number of blocks (" fu64 "): %s.", img->blocks_count, strerror(errno));
+        goto error_5;
+    } else {
+        log_debug("Number of blocks (" fu64 ") sent.", img->blocks_count);
+    }
+
+    if (ioctl(device_sock, BLKROSET, &(int){1}) == -1) {
+        log_error("Failed to set read only device attribute: %s.", strerror(errno));
+        goto error_5;
+    } else {
+        log_debug("Read only device attribute set.");
+    }
+
+    pthread_t thread;
+
+    // very hackish and complicated; lock thread imitate a client; this thread
+    // imitate a server.
+    if(pthread_create(&thread, NULL, lock_on_do_it, &device_sock) == -1) {
+        log_error("Failed to create lock thread.");
+        goto error_5;
+    } else {
+        log_debug("Lock thread created.");
+    }
+
+    close(kernel_sock);
+
+    WORKER(communication_sock, &obj);
+
+    // if WORKER returned, it means error so ...
+
+error_5:
+    if (ioctl(device_sock, NBD_DISCONNECT) == -1) {
+        log_error("Cannot disconnect from NBD device");
+    } else {
+        log_debug("Disconnected from NBD device.");
+    }
+
+error_4:
+    close(device_sock);
+    
+error_3:
+    close(kernel_sock);
+    close(communication_sock);
+
+
+error_2:
+    if (close_instance(&obj) == error) {
+        log_error("Failed to close an instance of image.");
+    } else {
+        log_debug("Image instance closed.");
+    }
+
+error_1:
+    log_msg(log_error, "Failed to initialize NBD device.");
     return error;
 }

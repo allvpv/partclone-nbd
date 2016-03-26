@@ -26,9 +26,12 @@
 
 
 struct options {
+    char* device_path;
     char* image_path;
     char* log_file;
     u64 elems_per_cache;
+    int server_mode;
+    int client_mode;
     int port;
     int syslog;
     int quiet;

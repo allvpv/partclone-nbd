@@ -34,10 +34,15 @@
 int main(int argc, char **argv)
 {
     /* -------------------- PARSE OPTIONS -------------------- */
+
+    // assing default values
     struct options options = {
+        .device_path = "/dev/nbd0",
         .image_path = NULL,
         .log_file = "partclone-nbd.log",
         .elems_per_cache = 512,
+        .server_mode = 0,
+        .client_mode = 0,
         .port = 10809,
         .syslog = 0,
         .quiet = 0
@@ -49,15 +54,17 @@ int main(int argc, char **argv)
         {"help",                no_argument,        NULL, 'h'},
         {"log-file",            required_argument,  NULL, 'L'},
         {"quiet",               no_argument,        NULL, 'q'},
+        {"server-mode",         no_argument,        NULL, 's'},
+        {"client-mode",         no_argument,        NULL, 'c'},
+        {"device",              required_argument,  NULL, 'd'},
         {"syslog",              no_argument,        NULL, 'S'},
-        {"silent",              no_argument,        NULL, 's'},
         {"version",             no_argument,        NULL, 'V'},
         {0},
     };
 
     for(;;) {
         int idx = 0;
-        int opt = getopt_long(argc, argv, "p:x:hL:qSsV", longopts, &idx);
+        int opt = getopt_long(argc, argv, "p:x:hL:qSscV", longopts, &idx);
 
         if(opt == -1) break;
 
@@ -75,14 +82,11 @@ int main(int argc, char **argv)
                 "Usage: partclone-nbd [OPTION...] partclone_image\n"
                 "Serve a partclone image as a block device.\n"
                 "\n"
-//              "modes:\n"
-//              "  -d, --daemon-mode          Run in background.\n"
-//              "  -s, --standard-mode        Standard mode, enabled by default\n"
-//              "\n"
-//              "daemon mode options (works only with '-d'):\n"
-//              "  -p, --pid-file=FILE        Specify a filename to write our PID to (default\n"
-//              "                             path: /var/run/partclone-nbd.pid).\n"
-//              "\n"
+                "modes:\n"
+                "  -c, --client-mode          Create a block device locally. Client mode is linux\n"
+                "                             specific and it wouldn't work on MacOS X\n"
+                "  -s, --server-mode          Listen on a port for clients.\n"
+                "\n"
                 "log_options:\n"
                 "  -l, --filelog              Use a log file instead of syslog (default).\n"
                 "  -S, --syslog               Use syslog instead of a log file.\n"
@@ -95,9 +99,11 @@ int main(int argc, char **argv)
                 "                             performance, but more RAM is consumed. Details in\n"
                 "                             manual.\n"
                 "\n"
-                "NBD options:\n"
+                "server mode options:\n"
                 "  -p, --port=NUM             Specify a port (default: 10809).\n"
-//              "  -M, --max-connections=NUM  Specify a maximum number of opened connections.\n"
+                "\n"
+                "client mode options:\n"
+                "  -d, --device=DEV           Specify another NBD device (default: /dev/nbd0)\n"
                 "\n"
                 "other options:\n"
                 "  -h, --help                 Give this help list.\n"
@@ -121,6 +127,30 @@ int main(int argc, char **argv)
             options.syslog = 1;
             break;
 
+        case 'c':
+            if(options.server_mode) {
+                fprintf(stderr, "You can specify only one mode!\n");
+                return (int) error;
+            }
+
+            options.client_mode = 1;
+
+            break;
+
+        case 's':
+            if(options.client_mode) {
+                fprintf(stderr, "You can specify only one (client or server) mode!\n");
+                return (int) error;
+            }
+
+            options.server_mode = 1;
+
+            break;
+
+        case 'd':
+            options.device_path = optarg;
+            break;
+
         case 'q':
             options.quiet = 1;
             break;
@@ -131,6 +161,7 @@ int main(int argc, char **argv)
         }
     }
 
+    // check if image is given
     if(optind >= argc) {
         fprintf(stderr, "%s: no image file specified.\n", argv[0]);
         return (int) error;
@@ -138,11 +169,20 @@ int main(int argc, char **argv)
         options.image_path = argv[optind];
     }
 
+    // check if mode is set
+    if(!options.client_mode) if(!options.server_mode) {
+        fprintf(stderr, "%s: you must specify a mode.\n", argv[0]);
+        return (int) error;
+    }
+
     struct image img;
 
     if(initialize_log(&options) == error) goto error_1;
     if(load_image(&img, &options) == error) goto error_2;
-    if(start_server(&img, &options) == error) goto error_3;
+    // it is a mess with client and server mode (methods); see nbd.c, everything
+    // is explained in comments (somwhere in the middle of the file).
+    if(options.client_mode) if(start_client(&img, &options) == error) goto error_3;
+    if(options.server_mode) if(start_server(&img, &options) == error) goto error_3;
     if(close_image(&img) == error) goto error_2;
     if(close_log() == error) goto error_1;
 

@@ -39,7 +39,7 @@ struct new_header
 {
     u8  magic[16]; // "partclone-image"
     u8  partclone_version_str[14]; // ex. "2.61"
-    u8  image_version_str[4]; // "0001" (without terminating null)
+    u8  image_version_str[4]; // "0002" (without terminating null)
     u16 endianess_checker; // ENDIANNESS_COMPATIBLE or ENDIANNESS_INCOMPATIBLE
     u8  fs_string[16]; // file system string
     u64 device_size; // size of source device in bytes
@@ -62,7 +62,7 @@ struct old_header
 {
     u8  magic[15]; // "partclone-image" (without terminating null)
     u8  fs_string[15]; // file system string
-    u8  image_version_str[4]; // ex. "0001" (without terminating null)
+    u8  image_version_str[4]; // "0001" (without terminating null)
     u8  padding[2];
     u32 block_size; // number of bytes in each block
     u64 device_size; // size of source device in bytes
@@ -179,7 +179,7 @@ status load_image(struct image *img, struct options *options)
     switch (img->bmpmode)
     {
     case bit:
-        log_error("Bitmap type \"bit\" is not supported yet.");
+        log_error("Bitmap type is \"bit\".");
 
         if(load_bit_bitmap(img, fd) == error) {
             goto error_2;

@@ -17,11 +17,9 @@ include_directories(include)
 ## Define the executable
 add_executable(${PROJECT_NAME} ${SRCS})
 
-## find pthread library
-find_package( Threads )
-
+## We will need pthread soon ...
 target_link_libraries(
-    ${PROJECT_NAME}  ${CMAKE_THREAD_LIBS_INIT}
+    ${PROJECT_NAME} pthread
 )
 
 ## install rules
