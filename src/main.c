@@ -116,7 +116,7 @@ int main(int argc, char **argv)
             return (int) ok;
 
         case 'V':
-            printf("partclone-nbd v0.0.1\n");
+            printf("partclone-nbd v0.0.2\n");
             return (int) ok;
 
         case 'L':
