@@ -154,7 +154,7 @@ status load_image(struct image *img, struct options *options)
         img->bitmap_elements_in_cache_element = options->elems_per_cache;
         img->data_offset = img->bitmap_offset + divide_up(img->blocks_count, 8) + img->checksum_size;
 
-        goto error_2;
+        log_debug("Header data loaded.");
 
     } else {
 
