@@ -1,5 +1,5 @@
 ## What is partclone-nbd?
-Serve a partclone (clonezilla) image as a block device to other (or local) computer.
+Partclone-nbd aims to be a smart and fast tool, which allows you to browse clonezilla images without restoring it.
 
 ## Installing
 ```
