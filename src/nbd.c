@@ -273,23 +273,20 @@ struct args {
     struct image *img;
 };
 
-// SERVER METHOD vs CLIENT METHOD
+// SERVER MODE vs CLIENT MODE
 
-// Both client method and server method try to gain socket to communicate with a
+// Both client mode and server mode try to gain socket to communicate with a
 // client. Client can be on the same computer as partclone-nbd, or somewhere in
 // the internet.
 
-// Server method can serve image to another computers through the INET socks.
+// Server mode can serve image to another computers through the INET socks.
 
-// Client method is much faster than server, because it uses UNIX(r) sockets,
+// Client mode is much faster than server, because it uses UNIX(r) sockets,
 // not INET sockets. But, of course, it's limited to one machine.
 
-// Client method is linux-specific, while server method can be used on, eg. Mac
-// OS using external, osx-nbd client. 
+// Both client mode and server mode finally call WORKER function.
 
-// Both client method and server method finally call WORKER function.
-
-/* ------------------------- SERVER METHOD --------------------------------- */
+/* ------------------------- SERVER MODE --------------------------------- */
 
 void *server_thread(void *args); // definition below, for better readability
 
@@ -546,7 +543,7 @@ error_2:
     return 0;
 }
 
-/* ------------------------- CLIENT METHOD ---------------------------------- */
+/* ------------------------- CLIENT MODE ---------------------------------- */
 
 // this thread imitates a client.
 void *lock_on_do_it(void *devsock_addr)
