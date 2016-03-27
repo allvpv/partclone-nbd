@@ -628,7 +628,19 @@ status start_client(struct image *img, struct options *options)
     pthread_t thread;
 
     // very hackish and complicated; lock thread imitate a client; this thread
-    // imitate a server.
+    // imitate a server. Quoting official nbd client:
+
+            /* Due to a race, the kernel NBD driver cannot
+             * call for a reread of the partition table
+             * in the handling of the NBD_DO_IT ioctl().
+             * Therefore, this is done in the first open()
+             * of the device. We therefore make sure that
+             * the device is opened at least once after the
+             * connection was made. This has to be done in a
+             * separate process, since the NBD_DO_IT ioctl()
+             * does not return until the NBD device has
+             * disconnected. */
+
     if(pthread_create(&thread, NULL, lock_on_do_it, &device_sock) == -1) {
         log_error("Failed to create lock thread.");
         goto error_5;
