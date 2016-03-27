@@ -79,8 +79,8 @@ union header
     struct new_header v2;
 } __attribute__ ((packed));
 
-static inline status load_byte_bitmap(struct image *img, int fd);
-static status load_bit_bitmap(struct image *img, int fd);
+static inline status load_byte_bitmap(struct image *img);
+static status load_bit_bitmap(struct image *img);
 
 status load_image(struct image *img, struct options *options)
 {
@@ -88,9 +88,9 @@ status load_image(struct image *img, struct options *options)
 
     img->path = options->image_path;
 
-    int fd = open(img->path, O_RDONLY);
+    img->fd = open(img->path, O_RDONLY);
 
-    if(fd == -1) {
+    if(img->fd == -1) {
         log_error("Cannot open image file: %s.", strerror(errno));
         goto error_1;
     } else {
@@ -101,7 +101,7 @@ status load_image(struct image *img, struct options *options)
 
     union header head;
 
-    if(read_whole(fd, &head, sizeof(union header)) == error) {
+    if(read_whole(img->fd, &head, sizeof(union header)) == error) {
         log_error("Cannot read image header: %s.", strerror(errno));
         goto error_2;
     } else {
@@ -183,7 +183,7 @@ status load_image(struct image *img, struct options *options)
     case bit:
         log_info("Bitmap type is \"bit\".");
 
-        if(load_bit_bitmap(img, fd) == error) {
+        if(load_bit_bitmap(img) == error) {
             goto error_2;
         }
 
@@ -194,7 +194,7 @@ status load_image(struct image *img, struct options *options)
     case byte:
         log_debug("Bitmap type is \"byte\".");
 
-        if(load_byte_bitmap(img, fd) == error) {
+        if(load_byte_bitmap(img) == error) {
             goto error_2;
         }
 
@@ -239,7 +239,10 @@ status load_image(struct image *img, struct options *options)
     }
 
     log_debug("Cache created.");
+    
+    /* -------------------- OFFSET -------------------- */
 
+    initialize_offset(img);
 
     log_info("Image loaded.");
     return ok;
@@ -253,7 +256,7 @@ error_3:
 
 error_2:
 
-    if(close(fd) == -1) {
+    if(close(img->fd) == -1) {
         log_error("Cannot close image file: %s", strerror(errno));
     } else {
         log_debug("Image file closed.");
@@ -269,14 +272,20 @@ status close_image(struct image *img)
     free(img->cache_ptr);
     free(img->bitmap_ptr);
 
-    log_debug("Memory allocated by bitmap cache released.");
-    log_debug("Memory allocated by bitmap relased.");
+    log_debug("Memory allocated by bitmap and cache released.");
+
+    if(close(img->fd) == -1) {
+        log_error("Cannot close an image file: %s.", strerror(errno));
+        return error;
+    } else {
+        log_debug("Image file closed.");
+    }
 
     return ok;
 }
 
 
-static status load_byte_bitmap(struct image *img, int fd)
+static status load_byte_bitmap(struct image *img)
 {
     /* allocate memory for bitmap */
 
@@ -299,7 +308,7 @@ static status load_byte_bitmap(struct image *img, int fd)
     u8 *bytearray_ptr;
     int length = img->blocks_count + 8 + img->bitmap_offset;
 
-    bytearray_ptr = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
+    bytearray_ptr = mmap(NULL, length, PROT_READ, MAP_SHARED, img->fd, 0);
 
     if(bytearray_ptr == MAP_FAILED) {
         log_error("Cannot map bytemap to memory: %s.", strerror(errno));
@@ -386,7 +395,7 @@ error_1:
     return error;
 }
 
-static status load_bit_bitmap(struct image *img, int fd)
+static status load_bit_bitmap(struct image *img)
 {
     /* allocate memory for bitmap */
     img->bitmap_elements = divide_up(img->blocks_count, 64);
@@ -403,14 +412,14 @@ static status load_bit_bitmap(struct image *img, int fd)
         log_debug("Memory for bitmap allocated.");
     }
 
-    if(set_file_offset(fd, img->bitmap_offset, SEEK_SET) == error) {
+    if(set_file_offset(img->fd, img->bitmap_offset, SEEK_SET) == error) {
         log_error("Cannot set file image offset to bitmap.");
         goto error_2;
     } else {
         log_debug("Offset set to bitmap.");
     }
 
-    if(read_whole(fd, img->bitmap_ptr, divide_up(img->blocks_count, 8)) == error) {
+    if(read_whole(img->fd, img->bitmap_ptr, divide_up(img->blocks_count, 8)) == error) {
         log_error("Cannot read bitmap: %s.", strerror(errno));
         goto error_2;
     }
@@ -428,61 +437,36 @@ error_1:
 
 /* ----------------- READING IMAGE ----------------- */
 
-static inline status set_block_from_the_ground(struct instance *obj, u64 block);
+static inline status set_block_from_the_ground(struct image *img, u64 block);
 
-status create_instance(struct instance *obj, struct image *img)
+status initialize_offset(struct image *img)
 {
-    obj->img = img;
+    img->o_num = 0;
+    img->o_bitmap_bit = 0;
+    img->o_bitmap_ptr = img->bitmap_ptr;
+    img->o_blocks_set = 0;
+    img->o_existence = *img->bitmap_ptr & 1;
+    img->o_remaining_bytes = img->block_size;
 
-    obj->o.num = 0;
-    obj->o.bitmap_bit = 0;
-    obj->o.bitmap_ptr = obj->img->bitmap_ptr;
-    obj->o.blocks_set = 0;
-    obj->o.existence = *obj->img->bitmap_ptr & 1;
-    obj->o.remaining_bytes = obj->img->block_size;
-
-    obj->o.fd = open(obj->img->path, O_RDONLY) ;
-
-    if(obj->o.fd == -1) {
-        log_error("Cannot open image file for reading.");
-        goto error;
-    }
-
-    if(set_file_offset(obj->o.fd, obj->img->data_offset, SEEK_SET) == error) {
-        close(obj->o.fd);
-    }
-
-    log_debug("Image instance created.");
-
-    return ok;
-
-error:
-    log_error("Cannot create an image instance.");
-    return error;
-}
-
-status close_instance(struct instance *obj)
-{
-    if(close(obj->o.fd) == -1) {
-        log_error("Cannot close an image file: %s.", strerror(errno));
+    if(set_file_offset(img->fd, img->data_offset, SEEK_SET) == error) {
+        log_error("Cannot set file offset to data starting point.");
         return error;
-    } else {
-        log_debug("Image file closed.");
     }
 
+    log_debug("Image image created.");
     return ok;
 }
 
-status set_block(struct instance *obj, u64 block)
+status set_block(struct image *img, u64 block)
 {
-    if(block == obj->o.num + 1) {
-        if(next_block(obj) == error) goto error;
+    if(block == img->o_num + 1) {
+        if(next_block(img) == error) goto error;
 
-    } else if(block != obj->o.num) {
-        if(set_block_from_the_ground(obj, block) == error) goto error;
+    } else if(block != img->o_num) {
+        if(set_block_from_the_ground(img, block) == error) goto error;
 
     } else {
-        if(offset_in_current_block(obj, 0) == error) goto error;
+        if(offset_in_current_block(img, 0) == error) goto error;
     }
 
     return ok;
@@ -493,7 +477,7 @@ status set_block(struct instance *obj, u64 block)
     }
 }
 
-static inline status set_block_from_the_ground(struct instance *obj, u64 block)
+static inline status set_block_from_the_ground(struct image *img, u64 block)
 {
     u64 i;
 
@@ -514,40 +498,40 @@ static inline status set_block_from_the_ground(struct instance *obj, u64 block)
      */
 
     /* (a) ----------------------------------------------------------------- */
-    obj->o.num = block;
-    obj->o.remaining_bytes = obj->img->block_size;
+    img->o_num = block;
+    img->o_remaining_bytes = img->block_size;
 
     /* (b) ----------------------------------------------------------------- */
-    u64 bitmap_element = obj->o.num / 64;
-    obj->o.bitmap_ptr = obj->img->bitmap_ptr + bitmap_element;
-    obj->o.bitmap_bit = obj->o.num % 64;
+    u64 bitmap_element = img->o_num / 64;
+    img->o_bitmap_ptr = img->bitmap_ptr + bitmap_element;
+    img->o_bitmap_bit = img->o_num % 64;
 
     /* (c) ----------------------------------------------------------------- */
-    obj->o.existence = (*obj->o.bitmap_ptr >> obj->o.bitmap_bit) & 1;
+    img->o_existence = (*img->o_bitmap_ptr >> img->o_bitmap_bit) & 1;
 
     /* (d) ----------------------------------------------------------------- */
 
     u64 cache_element =
-        bitmap_element / obj->img->bitmap_elements_in_cache_element;
+        bitmap_element / img->bitmap_elements_in_cache_element;
 
-    obj->o.blocks_set = obj->img->cache_ptr[cache_element];
+    img->o_blocks_set = img->cache_ptr[cache_element];
 
     /* (e) ----------------------------------------------------------------- */
     u64 remaining_blocks =
-        obj->o.num - cache_element *
-        obj->img->bitmap_elements_in_cache_element * 64;
+        img->o_num - cache_element *
+        img->bitmap_elements_in_cache_element * 64;
 
     /* (f) ----------------------------------------------------------------- */
     u64 iterations_num = remaining_blocks / 64;
 
     /* (g) ----------------------------------------------------------------- */
     u64 *bitmap_ptr =
-        obj->img->bitmap_ptr + cache_element *
-        obj->img->bitmap_elements_in_cache_element;
+        img->bitmap_ptr + cache_element *
+        img->bitmap_elements_in_cache_element;
 
     /* (h) ----------------------------------------------------------------- */
     for (i = 0; i < iterations_num; i++) {
-        obj->o.blocks_set += popcount(*bitmap_ptr++);
+        img->o_blocks_set += popcount(*bitmap_ptr++);
     }
 
     /* (i) ----------------------------------------------------------------- */
@@ -562,22 +546,22 @@ static inline status set_block_from_the_ground(struct instance *obj, u64 block)
         (0xFFFFFFFFFFFFFFFF >> shifter) & (-(shifter < 64));
 
     /* (j) ----------------------------------------------------------------- */
-    obj->o.blocks_set += popcount(*bitmap_ptr & last_bitmap_elem_mask);
+    img->o_blocks_set += popcount(*bitmap_ptr & last_bitmap_elem_mask);
 
     /* (h) ----------------------------------------------------------------- */
     u64 file_offset =
-        obj->o.blocks_set * obj->img->block_size
-        + (obj->o.blocks_set / obj->img->blocks_per_checksum) * obj->img->checksum_size
-        + obj->img->data_offset;
+        img->o_blocks_set * img->block_size
+        + (img->o_blocks_set / img->blocks_per_checksum) * img->checksum_size
+        + img->data_offset;
 
-    if(set_file_offset(obj->o.fd, file_offset, SEEK_SET) == error) {
+    if(set_file_offset(img->fd, file_offset, SEEK_SET) == error) {
         return error;
     }
 
     return ok;
 }
 
-status next_block(struct instance *obj)
+status next_block(struct image *img)
 {
     /* (1) is the next element of bitmap in a new byte, or in an old byte?
      * (2) compute addional offset when jumping to next block
@@ -590,33 +574,33 @@ status next_block(struct instance *obj)
 
     /* (1) ----------------------------------------------------------------- */
 
-    u8 next_bit_raw = obj->o.bitmap_bit + 1;
+    u8 next_bit_raw = img->o_bitmap_bit + 1;
 
-    obj->o.bitmap_bit = next_bit_raw % 64;
-    obj->o.bitmap_ptr += (next_bit_raw - 63) * (next_bit_raw / 63);
-    obj->o.num++;
+    img->o_bitmap_bit = next_bit_raw % 64;
+    img->o_bitmap_ptr += (next_bit_raw - 63) * (next_bit_raw / 63);
+    img->o_num++;
 
     /* (2) ----------------------------------------------------------------- */
 
-    u64 addional_offset = obj->o.existence *
-    (((((obj->o.blocks_set + 1) % obj->img->blocks_per_checksum) == 0) * obj->img->checksum_size) + obj->o.remaining_bytes);
+    u64 addional_offset = img->o_existence *
+    (((((img->o_blocks_set + 1) % img->blocks_per_checksum) == 0) * img->checksum_size) + img->o_remaining_bytes);
 
     /* (3) ----------------------------------------------------------------- */
 
-    obj->o.existence =
-        (*obj->o.bitmap_ptr >> obj->o.bitmap_bit) & 1;
+    img->o_existence =
+        (*img->o_bitmap_ptr >> img->o_bitmap_bit) & 1;
 
     /* (4) ----------------------------------------------------------------- */
 
-    obj->o.blocks_set += obj->o.existence;
+    img->o_blocks_set += img->o_existence;
 
     /* (5) ----------------------------------------------------------------- */
 
-    obj->o.remaining_bytes = obj->img->block_size;
+    img->o_remaining_bytes = img->block_size;
 
     /* (6) ----------------------------------------------------------------- */
 
-    if(set_file_offset(obj->o.fd, addional_offset, SEEK_CUR) == error) {
+    if(set_file_offset(img->fd, addional_offset, SEEK_CUR) == error) {
         log_error("Cannot set offset in next block.");
         return error;
     }
@@ -625,16 +609,15 @@ status next_block(struct instance *obj)
 }
 
 /* set a new offset inside a current block */
-status offset_in_current_block(struct instance *obj, u64 offset)
+status offset_in_current_block(struct image *img, u64 offset)
 {
-    u32 blk_remaining = obj->img->block_size - offset;
+    u32 blk_remaining = img->block_size - offset;
 
-    if(set_file_offset(obj->o.fd, obj->o.remaining_bytes - blk_remaining,
-                        SEEK_CUR) == error) {
+    if(set_file_offset(img->fd, img->o_remaining_bytes - blk_remaining, SEEK_CUR) == error) {
         log_error("Cannot set offset inside block.");
         return error;
     }
 
-    obj->o.remaining_bytes = blk_remaining;
+    img->o_remaining_bytes = blk_remaining;
     return ok;
 }

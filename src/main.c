@@ -22,7 +22,7 @@
 #include "partclone.h"
 #include "options.h"
 #include "log.h"
-#include "initialization.h"
+#include "image.h"
 #include "nbd.h"
 
 #include <unistd.h>

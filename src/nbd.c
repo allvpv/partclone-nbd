@@ -22,8 +22,7 @@
 #include "log.h"
 #include "io.h"
 #include "partclone.h"
-#include "read_image.h"
-#include "initialization.h"
+#include "image.h"
 #include "nbd.h"
 
 #include <sys/types.h>
@@ -158,13 +157,13 @@ static status send_reply(int sock, u64 handle, u32 error_number)
     return ok;
 }
 
-static status WORKER(int sock, struct instance *obj)
+static status WORKER(int sock, struct image *img)
 {
     void *buff, *zero;
 
-    buff = malloc(obj->img->block_size);
+    buff = malloc(img->block_size);
     // calloc do malloc and fills buffer with zeroes
-    zero = calloc(obj->img->block_size, 1); // "1" means size, NOT "fill with 1"
+    zero = calloc(img->block_size, 1); // "1" means size, NOT "fill with 1"
 
     if(buff == NULL || zero == NULL) /* allocation failed */ {
         log_error("Cannot allocate memory for storing a chunk.");
@@ -198,7 +197,7 @@ static status WORKER(int sock, struct instance *obj)
         }
 
         // verify request
-        if(seek > obj->img->device_size || count +seek > obj->img->device_size) {
+        if(seek > img->device_size || count + seek > img->device_size) {
         // ----------------------------------------------------------------- //
             log_msg(log_error,
                     "Parsing request: Offset is beyond the end of the image.");
@@ -220,27 +219,27 @@ static status WORKER(int sock, struct instance *obj)
 
         if(send_reply(sock, handle, 0) == error) break;
 
-        u64 block  = seek / obj->img->block_size;
-        u32 offset = seek % obj->img->block_size;
+        u64 block  = seek / img->block_size;
+        u32 offset = seek % img->block_size;
 
-        if(set_block(obj, block) == error) goto error_3;
-        if(offset_in_current_block(obj, offset) == error) goto error_3;
+        if(set_block(img, block) == error) goto error_3;
+        if(offset_in_current_block(img, offset) == error) goto error_3;
 
         void *read_buff; // read_buff = zero OR buff (see below)
 
         // send all chunks; size of chunk = size of image block (see *buff)
         for (;count > 0;) {
 
-            u32 once_read = MIN(obj->o.remaining_bytes, count);
+            u32 once_read = MIN(img->o_remaining_bytes, count);
             count -= once_read;
-            obj->o.remaining_bytes -= once_read;
+            img->o_remaining_bytes -= once_read;
 
             // ------------------------------------------------------------- //
 
-            if(obj->o.existence == 0) {
+            if(img->o_existence == 0) {
                 read_buff = zero;
 
-            } else if(read_whole(obj->o.fd, buff, once_read) != error) {
+            } else if(read_whole(img->fd, buff, once_read) != error) {
                 read_buff = buff;
 
             } else {
@@ -255,7 +254,7 @@ static status WORKER(int sock, struct instance *obj)
                 goto error_3;
             }
 
-            next_block(obj);
+            next_block(img);
         }
     }
 
@@ -363,15 +362,6 @@ error:
 
 static status server_negotiation(int sock, struct image *img)
 {
-    struct instance obj;
-
-    if(create_instance(&obj, img) == error) {
-        log_error("Cannot create an instance of the image.");
-        goto error_2;
-    } else {
-        log_debug("Image instance created.");
-    }
-
     u8 zero[124] = { 0 };
 
     // ====================================================================== //
@@ -476,7 +466,7 @@ static status server_negotiation(int sock, struct image *img)
     log_debug("Option parsed. Sending reply...");
 
 
-    if(put64(sock, obj.img->device_size) == error ||
+    if(put64(sock, img->device_size) == error ||
        put16(sock, flags2)               == error ){
     /* ---------------------------------------------------------------------- */
         log_error("Failed to send reply for an option");
@@ -493,17 +483,10 @@ static status server_negotiation(int sock, struct image *img)
 
     // FINALLY we gained client socket
 
-    WORKER(sock, &obj); 
+    WORKER(sock, img); 
     log_info("... so we are waiting for new connections.");
 
 error_1:
-    if(close_instance(&obj) == error) {
-        log_error("Failed to close an image instance.");
-    } else {
-        log_debug("Image instance closed.");
-    }
-
-error_2:
     if(close(sock) == -1) {
         log_error("Failed to close client sock: %s.", strerror(errno));
     } else {
@@ -533,15 +516,6 @@ void *lock_on_do_it(void *devsock_addr)
 
 status start_client(struct image *img, struct options *options)
 {
-    struct instance obj;
-
-    if(create_instance(&obj, img) == error) {
-        log_error("Cannot create an instance of the image.");
-        goto error_1;
-    } else {
-        log_debug("Image instance created.");
-    }
-
     int socket[2]; // socket[0] goes to the kernel, socket[1] to us
 
     if (socketpair(PF_UNIX, SOCK_STREAM, 0, socket) == -1) {
@@ -623,7 +597,7 @@ status start_client(struct image *img, struct options *options)
 
     close(kernel_sock);
 
-    WORKER(communication_sock, &obj);
+    WORKER(communication_sock, img);
 
     // if WORKER returned, it means error so ...
 
@@ -641,15 +615,7 @@ error_3:
     close(kernel_sock);
     close(communication_sock);
 
-
 error_2:
-    if (close_instance(&obj) == error) {
-        log_error("Failed to close an instance of image.");
-    } else {
-        log_debug("Image instance closed.");
-    }
-
-error_1:
     log_msg(log_error, "Failed to initialize NBD device.");
     return error;
 }

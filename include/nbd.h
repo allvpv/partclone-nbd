@@ -23,6 +23,7 @@
 #define NBD_H_INCLUDED
 
 #include "partclone.h"
+#include "image.h"
 
 status start_server(struct image *img, struct options *options);
 status start_client(struct image *img, struct options *options);
