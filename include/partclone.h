@@ -86,7 +86,7 @@ typedef int32_t     utf32;
 
 enum image_version {v1, v2};
 enum checksum_mode {crc32, ignore};
-enum bitmap_mode   {bit, byte, none};
+enum bitmap_mode   {bit = 0x01, byte = 0x08, none = 0x00};
 
 struct image
 {

@@ -179,13 +179,13 @@ status load_image(struct image *img, struct options *options)
     switch (img->bmpmode)
     {
     case bit:
-        log_error("Bitmap type is \"bit\".");
+        log_info("Bitmap type is \"bit\".");
 
         if(load_bit_bitmap(img, fd) == error) {
             goto error_2;
         }
 
-        goto error_2;
+        break;
     case none:
         log_error("Bitmap type \"none\" is not supported yet.");
         goto error_2;
