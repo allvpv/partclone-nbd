@@ -288,7 +288,7 @@ struct args {
 
 /* ------------------------- SERVER MODE --------------------------------- */
 
-void *server_thread(void *args); // definition below, for better readability
+static status server_negotiation(int sock, struct image *img);
 
 status start_server(struct image *img, struct options *options)
 {
@@ -335,13 +335,6 @@ status start_server(struct image *img, struct options *options)
 
     // the server loop
     for(;;) {
-        /* allocate memory for an argument */
-        struct args *arg = malloc(sizeof *arg);
-
-        if(arg == NULL) {
-            log_error("Cannot allocate memory for thread arguments.");
-            continue;
-        }
 
         /* accept a connection */
         struct sockaddr_in clientaddr;
@@ -351,24 +344,11 @@ status start_server(struct image *img, struct options *options)
 
         if(cl_sock == -1) {
             log_error("Failed to accept a connection.");
-            free(arg);
             continue;
         }
 
-        arg->cl_sock = cl_sock;
-        arg->img = img;
-
         log_info("Connection made with %s.", inet_ntoa(clientaddr.sin_addr));
-
-        pthread_t t;
-
-        if(pthread_create(&t, NULL, server_thread, arg) == error) {
-            log_error("Failed to create server thread: %s.", strerror(errno));
-            free(arg);
-            goto error;
-        } else {
-            log_debug("Thread created.");
-        }
+        server_negotiation(cl_sock, img);
     }
 
 error:
@@ -381,13 +361,8 @@ error:
     return error;
 }
 
-void *server_thread(void *args)
+static status server_negotiation(int sock, struct image *img)
 {
-    struct args *arguments = args;
-    int sock = arguments->cl_sock;
-    struct image *img = arguments->img;
-    free(args); /* free memory allocated by argument */
-
     struct instance obj;
 
     if(create_instance(&obj, img) == error) {
@@ -521,7 +496,6 @@ void *server_thread(void *args)
     WORKER(sock, &obj); 
     log_info("... so we are waiting for new connections.");
 
-
 error_1:
     if(close_instance(&obj) == error) {
         log_error("Failed to close an image instance.");
@@ -539,8 +513,7 @@ error_2:
     log_debug("Thread closed.");
     log_info("Waiting for new connections ...");
 
-    pthread_exit(0);
-    return 0;
+    return error;
 }
 
 /* ------------------------- CLIENT MODE ---------------------------------- */
