@@ -313,12 +313,11 @@ status start_server(struct image *img, struct options *options)
     }
 
     // bind port to a socket
-    struct sockaddr_in server_addr;
-    memset(&server_addr, 0, sizeof server_addr);
-
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(options->port);
+    struct sockaddr_in server_addr = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = htonl(INADDR_ANY),
+        .sin_port = htons(options->port)
+    };
 
     if(bind(sock, (struct sockaddr*) &server_addr, sizeof server_addr) == -1) {
         log_error("Failed to bind port to a socket: %s.", strerror(errno));
