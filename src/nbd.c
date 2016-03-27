@@ -396,24 +396,12 @@ void *server_thread(void *args)
 
     if(create_instance(&obj, img) == error) {
         log_error("Cannot create an instance of the image.");
-        goto error_3;
+        goto error_2;
     } else {
         log_debug("Image instance created.");
     }
 
-    void *zero = calloc(124, 1);
-
-    void *buff =
-        malloc(obj.img->block_size);
-
-    void *read_buff;
-
-    if(buff == NULL || zero == NULL) {
-        log_error("Failed to allocate memory.");
-        goto error_2;
-    } else {
-        log_debug("Memory allocated.");
-    }
+    u8 zero[124] = { 0 };
 
     // ====================================================================== //
     // ============================ NEGOTIATION ============================= //
@@ -526,7 +514,7 @@ void *server_thread(void *args)
         log_debug("Reply sent.");
     }
 
-    if(put(sock, zero, 124) != 124) {
+    if(put(sock, &zero, 124) != 124) {
         log_error("Failed to send 124 bytes of zero ending negotiation.");
     } else {
         log_debug("124 bytes of zero ending negotiation sent successufull.");
@@ -539,16 +527,13 @@ void *server_thread(void *args)
 
 
 error_1:
-    free(buff);
-
-error_2:
     if(close_instance(&obj) == error) {
         log_error("Failed to close an image instance.");
     } else {
         log_debug("Image instance closed.");
     }
 
-error_3:
+error_2:
     if(close(sock) == -1) {
         log_error("Failed to close client sock: %s.", strerror(errno));
     } else {
