@@ -224,16 +224,16 @@ status load_image(struct image *img, struct options *options)
     u64 *cache_ptr = img->cache_ptr;
     u64 *bitmap_ptr = img->bitmap_ptr;
 
-    *cache_ptr++ = 0;
+    *cache_ptr = 0;
 
     for (i = 1; i < img->cache_elements; i++) {
+
+        *(cache_ptr + 1) = *cache_ptr;
+        cache_ptr++;
 
         for (j = 0; j < img->bitmap_elements_in_cache_element; j++) {
             *cache_ptr += popcount(*bitmap_ptr++);
         }
-
-        *(cache_ptr + 1) = *cache_ptr;
-        cache_ptr++;
     }
 
     log_debug("Cache created.");
