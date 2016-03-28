@@ -71,4 +71,8 @@ typedef int32_t     utf32;
 #define divide_up(x, y) ((x) + ((y) - 1)) / (y)
 #define divide_round(x, y) (((x) + 1) / (y))
 
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#endif
+
 #endif

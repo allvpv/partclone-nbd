@@ -42,10 +42,6 @@
 #include <sys/ioctl.h>
 #include <sys/sendfile.h>
 
-#ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#endif
-
 // Macros from Linux kernel headers nbd.h and fs.h. Needed in start_client() method.
 
 #define NBD_SET_SOCK        _IO( 0xab, 0 )
