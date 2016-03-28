@@ -33,6 +33,7 @@ struct options {
     int server_mode;
     int client_mode;
     int port;
+    int custom_log_file;
     int syslog;
     int quiet;
 };

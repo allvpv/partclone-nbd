@@ -39,6 +39,7 @@ int main(int argc, char **argv)
     struct options options = {
         .device_path = "/dev/nbd0",
         .image_path = NULL,
+        .custom_log_file = 0,
         .log_file = "partclone-nbd.log",
         .elems_per_cache = 512,
         .server_mode = 0,
@@ -52,19 +53,19 @@ int main(int argc, char **argv)
         {"port",                required_argument,  NULL, 'p'},
         {"elems-per-cache",     required_argument,  NULL, 'x'},
         {"help",                no_argument,        NULL, 'h'},
-        {"log-file",            required_argument,  NULL, 'L'},
         {"quiet",               no_argument,        NULL, 'q'},
         {"server-mode",         no_argument,        NULL, 's'},
         {"client-mode",         no_argument,        NULL, 'c'},
         {"device",              required_argument,  NULL, 'd'},
         {"syslog",              no_argument,        NULL, 'S'},
+        {"log-file",            required_argument,  NULL, 'L'},
         {"version",             no_argument,        NULL, 'V'},
         {0},
     };
 
     for(;;) {
         int idx = 0;
-        int opt = getopt_long(argc, argv, "p:x:hL:qSscV", longopts, &idx);
+        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &idx);
 
         if(opt == -1) break;
 
@@ -88,7 +89,6 @@ int main(int argc, char **argv)
                 "  -s, --server-mode          Listen on a port for clients.\n"
                 "\n"
                 "log_options:\n"
-                "  -l, --filelog              Use a log file instead of syslog (default).\n"
                 "  -S, --syslog               Use syslog instead of a log file.\n"
                 "  -L, --log-file=FILE        Specify an alternative path for a log file.\n"
                 "                             Default: partclone-nbd.log.\n"
@@ -120,10 +120,20 @@ int main(int argc, char **argv)
             return (int) ok;
 
         case 'L':
+            if(options.syslog == 1) {
+                fprintf(stderr, "You cannot use syslog and log file simultaneously.\n");
+                return (int) error;
+            }
+
             options.log_file = optarg;
             break;
 
         case 'S':
+            if(options.custom_log_file == 1) {
+                fprintf(stderr, "You cannot use syslog and log file simultaneously.\n");
+                return (int) error;
+            }
+
             options.syslog = 1;
             break;
 
@@ -134,7 +144,6 @@ int main(int argc, char **argv)
             }
 
             options.client_mode = 1;
-
             break;
 
         case 's':
