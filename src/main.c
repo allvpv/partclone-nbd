@@ -64,8 +64,7 @@ int main(int argc, char **argv)
     };
 
     for(;;) {
-        int idx = 0;
-        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &idx);
+        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &(int){0});
 
         if(opt == -1) break;
 
@@ -84,7 +83,7 @@ int main(int argc, char **argv)
                 "Serve a partclone image as a block device.\n"
                 "\n"
                 "modes:\n"
-                "  -c, --client-mode          Create a block device locally.\n"
+                "  -c, --client-mode          Create a block device locally\n"
                 "  -s, --server-mode          Listen on a port for clients.\n"
                 "\n"
                 "log_options:\n"
