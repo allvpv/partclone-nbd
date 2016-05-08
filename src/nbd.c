@@ -154,14 +154,6 @@ static status send_reply(int sock, u64 handle, u32 error_number)
     return ok;
 }
 
-sigjmp_buf env;
-
-static void internal_signal_handler(signal_t sig)
-{
-    log_info("In handler... %s", strsignal(sig));
-    /* JUMP .... */ siglongjmp(env, sig);
-}
-
 static status WORKER(int sock, struct image *img)
 {
     void *buff, *zero;
