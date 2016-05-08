@@ -1,8 +1,6 @@
 ## What is partclone-nbd?
 Partclone-nbd aims to be a smart and fast tool, which allows you to browse clonezilla images without restoring it.
 
-Currently at beta state, because it lacks on signal support. When you hit Ctrl-C, partclone-nbd behaves like after KILL signal.
-
 ## Installing
 ```
  $ cmake CMakeLists.txt
