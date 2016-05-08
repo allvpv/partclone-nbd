@@ -64,7 +64,8 @@ int main(int argc, char **argv)
     };
 
     for(;;) {
-        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &(int){0});
+        int idx = 0; // it'll be incremented
+        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &idx);
 
         if(opt == -1) break;
 
@@ -114,7 +115,7 @@ int main(int argc, char **argv)
             return (int) ok;
 
         case 'V':
-            printf("partclone-nbd v0.0.2\n");
+            printf("partclone-nbd v0.0.3\n");
             return (int) ok;
 
         case 'L':

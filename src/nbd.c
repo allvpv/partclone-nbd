@@ -24,6 +24,7 @@
 #include "partclone.h"
 #include "image.h"
 #include "nbd.h"
+#include "signals.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -153,6 +154,14 @@ static status send_reply(int sock, u64 handle, u32 error_number)
     return ok;
 }
 
+sigjmp_buf env;
+
+static void internal_signal_handler(signal_t sig)
+{
+    log_info("In handler... %s", strsignal(sig));
+    /* JUMP .... */ siglongjmp(env, sig);
+}
+
 static status WORKER(int sock, struct image *img)
 {
     void *buff, *zero;
@@ -168,9 +177,22 @@ static status WORKER(int sock, struct image *img)
         log_debug("Memory for storing a chunk allocated.");
     }
 
+    int sig_num = sigsetjmp(env, 1); // set signal return point
+
+    if (sig_num != 0) {
+        log_error("Signal \"%s\" caught.", strsignal(sig_num));
+        goto error_3;
+    } else {
+        log_debug("Signal return point set.");
+    }
+    
+    initialize_handling(); // initialize signal handling
+
     // ====================================================================== //
     // ======================== REQUEST & REPLIES =========================== //
     // ====================================================================== //
+    
+    log_info("Waiting for requests ...");
 
     /* the great loop */
     for(;;)
