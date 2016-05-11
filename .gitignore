@@ -1,9 +1,10 @@
 partclone-nbd
+partclone-nbd.log
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
 Makefile
-.clang
+*.clang
 cmake_install.cmake
 install_manifest.txt
 *.cbp
