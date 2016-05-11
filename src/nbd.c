@@ -274,12 +274,6 @@ error_1:
     return error;
 }
 
-// pthread method to put arguments to a thread.
-struct args {
-    int cl_sock;
-    struct image *img;
-};
-
 // SERVER MODE vs CLIENT MODE
 
 // Both client mode and server mode try to gain socket to communicate with a
