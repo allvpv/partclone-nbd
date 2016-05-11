@@ -156,13 +156,12 @@ static status send_reply(int sock, u64 handle, u32 error_number)
 
 static status WORKER(int sock, struct image *img)
 {
-    void *buff, *zero;
+    void *zero;
 
-    buff = malloc(img->block_size);
     // calloc do malloc and fills buffer with zeroes
     zero = calloc(img->block_size, 1); // "1" means size, NOT "fill with 1"
 
-    if(buff == NULL || zero == NULL) /* allocation failed */ {
+    if(zero == NULL) /* allocation failed */ {
         log_error("Cannot allocate memory for storing a chunk.");
         goto error_1;
     } else {
@@ -235,8 +234,6 @@ static status WORKER(int sock, struct image *img)
         if(set_block(img, block) == error) goto error_3;
         if(offset_in_current_block(img, offset) == error) goto error_3;
 
-        void *read_buff; // read_buff = zero OR buff (see below)
-
         // send all chunks; size of chunk = size of image block (see *buff)
         for (;count > 0;) {
 
@@ -247,29 +244,30 @@ static status WORKER(int sock, struct image *img)
             // ------------------------------------------------------------- //
 
             if(img->o_existence == 0) {
-                read_buff = zero;
 
-            } else if(read_whole(img->fd, buff, once_read) != error) {
-                read_buff = buff;
+                if(put(sock, zero, once_read) != once_read) {
+                    log_error("Failed to write some zeroes to device: %s.", strerror(errno));
+                    goto error_3;
+                }
 
             } else {
-                log_error("Failed to read some data from the image.");
-                goto error_3;
+                
+                // direct transmission from device to device using sendfile
+                if(sendfile(sock, img->fd, NULL, once_read) != once_read) {
+                    log_error("Failed to send some data from image to device: %s.", strerror(errno));
+                    goto error_3;
+                }
+
             }
 
             // ------------------------------------------------------------- //
 
-            if(put(sock, read_buff, once_read) != once_read) {
-                log_error("Failed to send data to the image.");
-                goto error_3;
-            }
-
-            next_block(img);
+            if (next_block(img) == error) goto error_3;
         }
     }
 
 error_3:
-    free(buff);
+    free(zero);
 
 error_1:
     log_error("WORKER closed ...");
