@@ -80,6 +80,7 @@ union header
 } __attribute__ ((packed));
 
 static inline status load_byte_bitmap(struct image *img);
+static inline u64 compute_additional_blocks(struct image *img);
 static status load_bit_bitmap(struct image *img);
 
 status load_image(struct image *img, struct options *options)
@@ -114,7 +115,6 @@ status load_image(struct image *img, struct options *options)
     } else {
         log_debug("Correct image signature.");
     }
-
 
     if(memcmp(head.v1.image_version_str, "0001", 4) == 0) {
 
@@ -284,26 +284,26 @@ status close_image(struct image *img)
     return ok;
 }
 
+// Device is larger than blocks area (NTFS)? Create empty blocks.
+static inline u64 compute_additional_blocks(struct image *img)
+{
+    u64 additional_blocks = 0;
+    u64 blocks_area_size = img->blocks_count * img->block_size;
+
+    if(blocks_area_size < img->device_size) {
+        additional_blocks = divide_up((img->device_size - blocks_area_size), img->block_size);
+        log_debug("Blocks area size is smaller than device size.");
+        log_debug("Creating " fu64 " additional blocks.", additional_blocks);
+    } else {
+        log_debug("Blocks area size is equal to device size.");
+    }
+
+    return additional_blocks;
+}
 
 static status load_byte_bitmap(struct image *img)
 {
-    /* allocate memory for bitmap */
-
-    img->bitmap_elements = divide_up(img->blocks_count, 64);
-    img->bitmap_size = img->bitmap_elements * 8;
-
-    log_debug("Memory required by bitmap: " fu64 ".", img->bitmap_size);
-
-    img->bitmap_ptr = calloc(img->bitmap_size, 1);
-
-    if(img->bitmap_ptr == NULL) {
-        log_error("Cannot allocate memory for bitmap.");
-        goto error_1;
-    } else {
-        log_debug("Memory for bitmap allocated.");
-    }
-
-    /* -------------------- MAP BYTEMAP TO MEMORY -------------------- */
+   /* -------------------- MAP BYTEMAP TO MEMORY -------------------- */
 
     u8 *bytearray_ptr;
     int length = img->blocks_count + 8 + img->bitmap_offset;
@@ -328,6 +328,24 @@ static status load_byte_bitmap(struct image *img)
         log_debug("Correct bitmap signature.");
     }
 
+    /* ------------------ ALLOCATE MEMORY FOR BITMAP ----------------- */
+
+    u64 additional_blocks = compute_additional_blocks(img);
+
+    img->bitmap_elements = divide_up((img->blocks_count + additional_blocks), 64);
+    img->bitmap_size = img->bitmap_elements * 8;
+
+    log_debug("Memory required by bitmap: " fu64 ".", img->bitmap_size);
+
+    img->bitmap_ptr = calloc(img->bitmap_size, 1);
+
+    if(img->bitmap_ptr == NULL) {
+        log_error("Cannot allocate memory for bitmap.");
+        goto error_1;
+    } else {
+        log_debug("Memory for bitmap allocated.");
+    }
+
     /* -------------------- CREATE BITMAP FROM BYTEMAP -------------------- */
 
     u64 i, first_iteration = img->blocks_count / 64,
@@ -339,10 +357,14 @@ static status load_byte_bitmap(struct image *img)
 
     for (i = 0; i < first_iteration; i++)
     {
-        t(0);  t(1);  t(2);  t(3);  t(4);  t(5);  t(6);  t(7);  t(8);  t(9);  t(10); t(11); t(12); t(13); t(14); t(15);
-        t(16); t(17); t(18); t(19); t(20); t(21); t(22); t(23); t(24); t(25); t(26); t(27); t(28); t(29); t(30); t(31);
-        t(32); t(33); t(34); t(35); t(36); t(37); t(38); t(39); t(40); t(41); t(42); t(43); t(44); t(45); t(46); t(47);
-        t(48); t(49); t(50); t(51); t(52); t(53); t(54); t(55); t(56); t(57); t(58); t(59); t(60); t(61); t(62); t(63);
+        t(0);  t(1);  t(2);  t(3);  t(4);  t(5);  t(6);  t(7);
+        t(8);  t(9);  t(10); t(11); t(12); t(13); t(14); t(15);
+        t(16); t(17); t(18); t(19); t(20); t(21); t(22); t(23);
+        t(24); t(25); t(26); t(27); t(28); t(29); t(30); t(31);
+        t(32); t(33); t(34); t(35); t(36); t(37); t(38); t(39);
+        t(40); t(41); t(42); t(43); t(44); t(45); t(46); t(47);
+        t(48); t(49); t(50); t(51); t(52); t(53); t(54); t(55);
+        t(56); t(57); t(58); t(59); t(60); t(61); t(62); t(63);
 
         bitmap_ptr++;
     }
@@ -360,6 +382,12 @@ static status load_byte_bitmap(struct image *img)
     /*
      * end of bitmap is already filled with zeroes (calloc)
      */
+
+    /* --------------------- ADD ADDITIONAL BLOCKS ---------------------- */
+
+    img->blocks_count += additional_blocks;
+
+    /* ------------------------------------------------------------------ */
 
     log_debug("Bytemap loaded to bitmap.");
 
@@ -398,10 +426,12 @@ error_1:
 static status load_bit_bitmap(struct image *img)
 {
     /* allocate memory for bitmap */
-    img->bitmap_elements = divide_up(img->blocks_count, 64);
+    u64 additional_blocks = compute_additional_blocks(img);
+
+    img->bitmap_elements = divide_up((img->blocks_count + additional_blocks), 64);
     img->bitmap_size = img->bitmap_elements * 8;
 
-    log_debug("Memory reqiuered by bitmap " fu64 " bytes.", img->bitmap_size);
+    log_debug("Memory required by bitmap " fu64 " bytes.", img->bitmap_size);
 
     img->bitmap_ptr = calloc(img->bitmap_size, 1);
 
@@ -423,6 +453,8 @@ static status load_bit_bitmap(struct image *img)
         log_error("Cannot read bitmap: %s.", strerror(errno));
         goto error_2;
     }
+
+    img->blocks_count += additional_blocks;
 
    log_debug("Bitmap loaded.");
 
