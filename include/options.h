@@ -34,8 +34,8 @@ struct options {
     int client_mode;
     int port;
     int custom_log_file;
-    int syslog;
     int quiet;
+    int debug;
 };
 
 #endif // OPTIONS_H_INCLUDED
