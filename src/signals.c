@@ -30,18 +30,18 @@
 #include "partclone.h"
 #include "log.h"
 
-    struct {
-        int sig_num;
-        char* sig_char;
-    } sigs_to_handle[] = {
-        {SIGHUP,  "SIGHUP" },
-        {SIGINT,  "SIGINT" },
-        {SIGTERM, "SIGTERM"},
-        {SIGQUIT, "SIGQUIT"},
-        {SIGUSR1, "SIGUSR1"},
-        {SIGUSR2, "SIGUSR2"},
-        {0}
-    };
+struct {
+    int sig_num;
+    char* sig_char;
+} sigs_to_handle[] = {
+    {SIGHUP,  "SIGHUP" },
+    {SIGINT,  "SIGINT" },
+    {SIGTERM, "SIGTERM"},
+    {SIGQUIT, "SIGQUIT"},
+    {SIGUSR1, "SIGUSR1"},
+    {SIGUSR2, "SIGUSR2"},
+    {0}
+};
 
 sigjmp_buf env;
 
@@ -51,7 +51,8 @@ static void internal_signal_handler(signal_t sig)
     /* JUMP .... */ siglongjmp(env, sig);
 }
 
-void cleanup_after_signal_handling()
+/* to avoid duplication of signal handling */
+void block_signals_in_thread()
 {
     sigset_t mask;
     sigemptyset(&mask);
@@ -60,7 +61,7 @@ void cleanup_after_signal_handling()
         sigaddset(&mask, sigs_to_handle[i].sig_num);
     }
 
-    sigprocmask(SIG_SETMASK, &mask, NULL);
+    pthread_sigmask(SIG_SETMASK, &mask, NULL);
 }
 
 void initialize_handling()

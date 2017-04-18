@@ -172,12 +172,13 @@ static status WORKER(int sock, struct image *img)
     int sig_num = sigsetjmp(env, 1); 
 
     if (sig_num != 0) {
-        cleanup_after_signal_handling();
+        block_signals_in_thread();
         log_error("Signal \"%s\" caught.", strsignal(sig_num));
         goto error_3;
     } else {
         log_debug("Signal return point set.");
     }
+    
     
     initialize_handling(); // initialize signal handling
 
@@ -272,7 +273,7 @@ error_3:
     free(zero);
 
 error_1:
-    log_error("WORKER closed ...");
+    log_error("WORKER closed.");
     return error;
 }
 
@@ -336,7 +337,6 @@ status start_server(struct image *img, struct options *options)
 
     log_info("Server initialized. Listening on a port %i ...", options->port);
 
-    // the server loop
     for(;;) {
 
         /* accept a connection */
@@ -352,6 +352,7 @@ status start_server(struct image *img, struct options *options)
 
         log_info("Connection made with %s.", inet_ntoa(clientaddr.sin_addr));
         server_negotiation(cl_sock, img);
+        break;
     }
 
 error:
@@ -488,7 +489,6 @@ static status server_negotiation(int sock, struct image *img)
     // FINALLY we gained client socket
 
     WORKER(sock, img); 
-    log_info("... so we are waiting for new connections.");
 
 error_1:
     if(close(sock) == -1) {
@@ -496,9 +496,6 @@ error_1:
     } else {
         log_debug("Client sock closed.");
     }
-
-    log_debug("Thread closed.");
-    log_info("Waiting for new connections ...");
 
     return error;
 }
@@ -508,6 +505,8 @@ error_1:
 // this thread imitates a client.
 void *lock_on_do_it(void *devsock_addr)
 {
+    block_signals_in_thread();
+    
     int devsock = *(int*) devsock_addr;
 
     if (ioctl(devsock, NBD_DO_IT) == -1) {
@@ -615,12 +614,12 @@ error_5:
         log_debug("Disconnected from NBD device.");
     }
 
-    /*if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {*/
-        /*log_error("Failed to clear a NBD device socket: %s.", strerror(errno));*/
-        /*goto error_4;*/
-    /*} else {*/
-        /*log_debug("NBD device socket cleared.");*/
-    /*}*/
+    if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {
+        log_error("Failed to clear a NBD device socket: %s.", strerror(errno));
+        goto error_4;
+    } else {
+        log_debug("NBD device socket cleared.");
+    }
 
     pthread_join(thread, NULL);
 

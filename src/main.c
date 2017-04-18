@@ -40,12 +40,12 @@ int main(int argc, char **argv)
         .device_path = "/dev/nbd0",
         .image_path = NULL,
         .custom_log_file = 0,
-        .log_file = "partclone-nbd.log",
+        .log_file = "/var/log/partclone-nbd.log",
         .elems_per_cache = 512,
         .server_mode = 0,
         .client_mode = 0,
         .port = 10809,
-        .syslog = 0,
+        .debug = 0,
         .quiet = 0
     };
 
@@ -57,15 +57,15 @@ int main(int argc, char **argv)
         {"server-mode",         no_argument,        NULL, 's'},
         {"client-mode",         no_argument,        NULL, 'c'},
         {"device",              required_argument,  NULL, 'd'},
-        {"syslog",              no_argument,        NULL, 'S'},
         {"log-file",            required_argument,  NULL, 'L'},
+        {"debug",               no_argument,        NULL, 'D'},
         {"version",             no_argument,        NULL, 'V'},
         {0},
     };
 
     for(;;) {
         int idx = 0; // it'll be incremented
-        int opt = getopt_long(argc, argv, "p:x:hSL:qscV", longopts, &idx);
+        int opt = getopt_long(argc, argv, "p:d:x:hL:DqscV", longopts, &idx);
 
         if(opt == -1) break;
 
@@ -88,9 +88,9 @@ int main(int argc, char **argv)
                 "  -s, --server-mode          Listen on a port for clients.\n"
                 "\n"
                 "log_options:\n"
-                "  -S, --syslog               Use syslog instead of a log file.\n"
                 "  -L, --log-file=FILE        Specify an alternative path for a log file.\n"
                 "                             Default: partclone-nbd.log.\n"
+                "  -D, --debug                Print debug messages to stdout.\n"
                 "\n"
                 "image options:\n"
                 "  -x, --elems-per-cache=NUM  Specify a number of bitmap elements per one cache\n"
@@ -106,10 +106,9 @@ int main(int argc, char **argv)
                 "\n"
                 "other options:\n"
                 "  -h, --help                 Give this help list.\n"
-                "  -q, --quiet                Do not print debug messages.\n"
+                "  -q, --quiet                Print messages only to log file.\n"
                 "  -V, --version              Print program version.\n"
                 "\n"
-                "Detalied descriptions of all options are available in the manual.\n"
             );
 
             return (int) ok;
@@ -119,22 +118,11 @@ int main(int argc, char **argv)
             return (int) ok;
 
         case 'L':
-            if(options.syslog == 1) {
-                fprintf(stderr, "You cannot use syslog and log file simultaneously.\n");
-                return (int) error;
-            }
-
             options.log_file = optarg;
             break;
 
-        case 'S':
-            if(options.custom_log_file == 1) {
-                fprintf(stderr, "You cannot use syslog and log file simultaneously.\n");
-                return (int) error;
-            }
-
-            options.syslog = 1;
-            break;
+        case 'D':
+            options.debug = 1;
 
         case 'c':
             if(options.server_mode) {
@@ -164,7 +152,7 @@ int main(int argc, char **argv)
             break;
 
         case '?':
-            fprintf(stderr, "Type 'partclone-nbd --help' or 'man partclone'.\n");
+            fprintf(stderr, "Type 'partclone-nbd --help'.\n");
             return (int) error;
         }
     }
@@ -201,7 +189,7 @@ error_3:
     close_image(&img);
 
 error_2:
-    log_error("Errors occured - see log file for details.");
+    log_error("Errors occured - see log file \"%s\" for details.", options.log_file);
     close_log();
 
 error_1:
