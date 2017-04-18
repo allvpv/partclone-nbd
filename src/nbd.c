@@ -167,10 +167,12 @@ static status WORKER(int sock, struct image *img)
     } else {
         log_debug("Memory for storing a chunk allocated.");
     }
-
-    int sig_num = sigsetjmp(env, 1); // set signal return point
+    
+    // set signal return point; must be before initialize_handling() (!)
+    int sig_num = sigsetjmp(env, 1); 
 
     if (sig_num != 0) {
+        cleanup_after_signal_handling();
         log_error("Signal \"%s\" caught.", strsignal(sig_num));
         goto error_3;
     } else {
@@ -613,12 +615,12 @@ error_5:
         log_debug("Disconnected from NBD device.");
     }
 
-    if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {
-        log_error("Failed to clear a NBD device socket: %s.", strerror(errno));
-        goto error_4;
-    } else {
-        log_debug("NBD device socket cleared.");
-    }
+    /*if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {*/
+        /*log_error("Failed to clear a NBD device socket: %s.", strerror(errno));*/
+        /*goto error_4;*/
+    /*} else {*/
+        /*log_debug("NBD device socket cleared.");*/
+    /*}*/
 
     pthread_join(thread, NULL);
 

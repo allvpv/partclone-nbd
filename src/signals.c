@@ -24,27 +24,11 @@
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+#include <stdlib.h>
 
 #include "signals.h"
 #include "partclone.h"
 #include "log.h"
-
-sigjmp_buf env;
-
-// this handler will jump to function sigsetjmp() called somewhere before
-static void internal_signal_handler(signal_t sig)
-{
-    /* JUMP .... */ siglongjmp(env, sig);
-}
-
-void initialize_handling()
-{
-    struct sigaction sa = {
-        .sa_handler = &internal_signal_handler, 
-        .sa_flags = SA_RESTART // Restart the system call, if at all possible
-    };
-
-    sigfillset(&sa.sa_mask); // Block every signal during the handler
 
     struct {
         int sig_num;
@@ -57,6 +41,38 @@ void initialize_handling()
         {SIGUSR1, "SIGUSR1"},
         {SIGUSR2, "SIGUSR2"},
         {0}
+    };
+
+sigjmp_buf env;
+
+// this handler will jump to function sigsetjmp() called somewhere before
+static void internal_signal_handler(signal_t sig)
+{
+    /* JUMP .... */ siglongjmp(env, sig);
+}
+
+void cleanup_after_signal_handling()
+{
+    sigset_t mask;
+    sigemptyset(&mask);
+
+    for(int i = 0; sigs_to_handle[i].sig_num; i++) {
+        sigaddset(&mask, sigs_to_handle[i].sig_num);
+    }
+
+    sigprocmask(SIG_SETMASK, &mask, NULL);
+}
+
+void initialize_handling()
+{
+    // mask every signal during signal handler execution
+    sigset_t mask;
+    sigfillset(&mask);
+    
+    struct sigaction sa = {
+        .sa_handler = &internal_signal_handler, 
+        .sa_mask = mask,
+        .sa_flags = SA_RESTART // Restart the system call, if at all possible
     };
 
     for(int i = 0; sigs_to_handle[i].sig_num; i++) {

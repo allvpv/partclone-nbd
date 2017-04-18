@@ -29,5 +29,6 @@ typedef int signal_t;
 extern sigjmp_buf env; // defined in signal.c
 
 void initialize_handling();
+void cleanup_after_signal_handling();
 
 #endif // SIGNALS_H_INCLUDED
