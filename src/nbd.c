@@ -512,6 +512,8 @@ void *lock_on_do_it(void *devsock_addr)
         log_error("Failed to lock on NBD_DO_IT: %s.", strerror(errno));
     }
 
+    log_debug("Locking finished.");
+
     pthread_exit(0);
 }
 
@@ -606,9 +608,19 @@ status start_client(struct image *img, struct options *options)
 error_5:
     if (ioctl(device_sock, NBD_DISCONNECT) == -1) {
         log_error("Cannot disconnect from NBD device");
+        goto error_4;
     } else {
         log_debug("Disconnected from NBD device.");
     }
+
+    if (ioctl(device_sock, NBD_CLEAR_SOCK) == -1) {
+        log_error("Failed to clear a NBD device socket: %s.", strerror(errno));
+        goto error_4;
+    } else {
+        log_debug("NBD device socket cleared.");
+    }
+
+    pthread_join(thread, NULL);
 
 error_4:
     close(device_sock);
