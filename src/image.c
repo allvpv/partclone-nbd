@@ -106,7 +106,7 @@ status load_image(struct image *img, struct options *options)
         log_error("Cannot read image header: %s.", strerror(errno));
         goto error_2;
     } else {
-        log_debug("Image header readed.");
+        log_debug("Image header read.");
     }
 
     if(memcmp(head.v1.magic, "partclone-image", 15) != 0) {
