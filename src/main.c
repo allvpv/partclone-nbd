@@ -123,6 +123,7 @@ int main(int argc, char **argv)
 
         case 'D':
             options.debug = 1;
+            break;
 
         case 'c':
             if(options.server_mode) {

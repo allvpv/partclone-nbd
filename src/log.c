@@ -102,7 +102,7 @@ NOT_LITERAL void log_msg(enum log_priority priority, const char *format, ...)
     
     if(quiet) return;
 
-    FILE *stream;
+    FILE *stream = NULL;
 
     switch(priority)
     {
@@ -114,6 +114,8 @@ NOT_LITERAL void log_msg(enum log_priority priority, const char *format, ...)
     case log_debug:
         if(!debug)
             return;
+        stream = stdout;
+        break;
 
     // to stdout
     case log_info:
