@@ -129,6 +129,7 @@ NOT_LITERAL void log_msg(enum log_priority priority, const char *format, ...)
     fprintf(stream, "%s", print_priority_string[priority]);
     vfprintf(stream, format, args);
     fprintf(stream, "\n");
+    fflush(stream);
 
     va_end(args);
 }
