@@ -1,9 +1,14 @@
-## What is partclone-nbd?
-Partclone-nbd aims to be smart and fast tool, which allows you to browse clonezilla images without restoring it.
+## partclone-nbd
+Partclone-nbd exports partclone/clonezilla partition image using NBD protocol;
+thus, it allows mount partition image directly, without restoring it to
+another device. 
 
-Probably you can use partclone-nbd out of the box (the kernel module `nbd` is shipped with your Linux distribution). For server mode, an external client is needed. An official `nbd-client` is usually shipped in a package `nbd` (`yoe/nbd` on github).
+Partclone-nbd requires `nbd` kernel module (enabled by default in kernel config
+file and available in most Linux distributions). Server mode requires external
+client.  Official `nbd-client` is available in most repositories (`yoe/nbd` on
+Github).
 
-## Installing
+## Compilation and installation
 ```
  $ cmake CMakeLists.txt
  $ make
@@ -12,23 +17,22 @@ Probably you can use partclone-nbd out of the box (the kernel module `nbd` is sh
 
 ## Usage
 
-### client mode (prefered)
+### client mode (preferred)
 ```
  # modprobe nbd 
  # partclone-nbd -c ~/your/image.pc
  # mount /dev/nbd0 /mount/path
 ```
 ### server mode
-On a server machine:
+Set up a server:
 ```
  $ partclone-nbd -s ~/your/image.pc
 ```
 
-On a client machine:
+Connect client:
 ```
  # modprobe nbd
- # nbd-client 216.IP.ADDR.OF.SERVER.142 /dev/nbd0
+ # nbd-client IP.ADDR /dev/nbd0
  # mount /dev/nbd0 /mount/path
 ```
 
-Of course client and server could be on the same machine, but in this case using client mode is a better idea.
