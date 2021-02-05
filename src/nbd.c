@@ -38,7 +38,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <stropts.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/sendfile.h>
