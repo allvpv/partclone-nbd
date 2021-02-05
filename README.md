@@ -1,7 +1,6 @@
 ## partclone-nbd
 Partclone-nbd exports partclone/clonezilla partition image using NBD protocol;
-thus, it allows mount partition image directly, without restoring it to
-another device. 
+thus, partition image can be accessed directly as a block device.
 
 Partclone-nbd requires `nbd` kernel module (enabled by default in kernel config
 file and available in most Linux distributions). Server mode requires external
