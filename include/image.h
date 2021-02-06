@@ -53,7 +53,7 @@ struct image
     u32 o_remaining_bytes;
     // is this block present in the image or does it remain unused?
     u8  o_existence;
-    // no. of set blocks from the beggining of the image to this block
+    // no. of set blocks from the beginning of the image to this block
     u64 o_blocks_set;
     // the pointer to the last element of the bitmap
     u64 *o_bitmap_ptr;
@@ -102,9 +102,9 @@ struct image
 	u16 checksum_size;
 	// how many blocks are checksumed together
 	u32 blocks_per_checksum;
-    // offset of data (from the beggining of the image)
+    // offset of data (from the beginning of the image)
     u64 data_offset;
-    // offset of on-disk bitmap (from the beggining of the image)
+    // offset of on-disk bitmap (from the beginning of the image)
     u64 bitmap_offset;
 };
 

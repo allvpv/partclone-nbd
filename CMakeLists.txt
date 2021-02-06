@@ -22,5 +22,7 @@ target_link_libraries(
     ${PROJECT_NAME} pthread
 )
 
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Werror)
+
 ## install rules
 install (TARGETS partclone-nbd DESTINATION bin)

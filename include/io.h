@@ -39,7 +39,7 @@ static inline status read_whole(int fd, void *dest, size_t size)
     {
         if(once_read > 0)
         {
-            dest   +=  once_read;
+            dest   =  (u8*)dest + once_read;
             size   -=  (size_t) once_read;
         }
         else if(errno != EINTR)
